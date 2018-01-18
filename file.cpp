@@ -3,7 +3,13 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
+#ifdef VITA
+#include <psp2/io/dirent.h>
+#include <psp2/io/stat.h>
+#include <psp2/types.h>
+#else
 #include <dirent.h>
+#endif
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <zlib.h>
@@ -147,6 +153,31 @@ struct FileSystem {
 		free(_fileList);
 	}
 	void buildFileListFromDirectory(const char *dir) {
+#ifdef VITA
+		SceUID d = sceIoDopen(dir);
+		if (d) {
+			SceIoDirent de;
+			memset(&de, 0, sizeof(de));
+
+			while (sceIoDread(d, &de) > 0) {
+				if (de.d_name[0] == '.') {
+					continue;
+				}
+				char filePath[MAXPATHLEN];
+				snprintf(filePath, sizeof(filePath), "%s/%s", dir, de.d_name);
+				SceIoStat st = de.d_stat;
+				if (SCE_S_ISDIR(st.st_mode)) {
+					buildFileListFromDirectory(filePath);
+				} else {
+					_fileList = (char **)realloc(_fileList, (_fileCount + 1) * sizeof(char *));
+					if (_fileList) {
+						_fileList[_fileCount] = strdup(filePath + _filePathSkipLen);
+						++_fileCount;
+					}
+				}
+			}
+			sceIoDclose(d);
+#else
 		DIR *d = opendir(dir);
 		if (d) {
 			dirent *de;
@@ -170,6 +201,7 @@ struct FileSystem {
 				}
 			}
 			closedir(d);
+#endif
 		}
 	}
 	void setDataDirectory(const char *dir) {

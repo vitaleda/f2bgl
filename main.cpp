@@ -6,6 +6,7 @@
 #include <SDL.h>
 #include <string.h>
 #include "stub.h"
+#include "util.h"
 
 const char *g_caption = "Fade2Black/OpenGL";
 
@@ -36,6 +37,11 @@ static int gJoystickMap[kJoystickMapSize];
 static int gGamepadMap[SDL_CONTROLLER_BUTTON_MAX];
 
 static int gKeyScancodeMap[512];
+
+#ifdef VITA
+#include <psp2/power.h>
+int _newlib_heap_size_user = 192 * 1024 * 1024;
+#endif
 
 static void setupKeyMap() {
 	// keyboard
@@ -151,6 +157,9 @@ static int transformPointerY(int y) {
 }
 
 int main(int argc, char *argv[]) {
+#ifdef VITA
+	scePowerSetArmClockFrequency(444);
+#endif
 	GameStub *stub = GameStub_create();
 	if (!stub) {
 		return -1;

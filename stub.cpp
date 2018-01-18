@@ -319,10 +319,19 @@ struct GameStub_F2B : GameStub {
 		return _params.mouseMode || _params.touchMode;
 	}
 	virtual int init() {
+#ifdef VITA
+		// TODO: sceIoMkdir des deux chemins suivants
+		// TODO: détection la région à utiliser (voir ZeldaNSQ)
+		if (!fileInit(kFileLanguage_FR, kFileLanguage_FR, "ux0:data/f2bgl/data", "ux0:data/f2bgl/saves")) {
+			warning("Unable to find datafiles");
+			return -2;
+		}
+#else
 		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : ".", _savePath ? _savePath : ".")) {
 			warning("Unable to find datafiles");
 			return -2;
 		}
+#endif
 		_render = new Render(&_renderParams);
 		_g = new Game(_render, &_params);
 		_g->init();

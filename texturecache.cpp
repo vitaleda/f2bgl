@@ -3,7 +3,9 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#ifdef USE_GLES
+#ifdef VITA
+#include <SDL_opengl.h>
+#elif USE_GLES
 #include <GLES/gl.h>
 #else
 #include <SDL_opengl.h>
@@ -243,7 +245,9 @@ Texture *TextureCache::createTexture(const uint8_t *data, int w, int h, bool rgb
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
+#ifndef VITA // FIXME
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+#endif
 		glTexImage2D(GL_TEXTURE_2D, 0, _formats[_fmt].internal, t->texW, t->texH, 0, _formats[_fmt].format, _formats[_fmt].type, texData);
 		free(texData);
 	}

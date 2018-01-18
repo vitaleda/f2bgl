@@ -3,7 +3,9 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#ifdef USE_GLES
+#ifdef VITA
+#include <SDL_opengl.h>
+#elif USE_GLES
 #include <GLES/gl.h>
 #else
 #include <SDL_opengl.h>
@@ -21,9 +23,11 @@ struct Vertex3f {
 
 #ifdef USE_GLES
 
+#ifndef VITA
 #define glOrtho glOrthof
 #define glFrustum glFrustumf
 #define glFogi glFogf
+#endif
 
 static const int kVerticesBufferSize = 1024;
 static GLfloat _verticesBuffer[kVerticesBufferSize * 3];
@@ -170,14 +174,18 @@ void Render::flushCachedTextures() {
 static const GLfloat _fogColor[4] = { .1, .1, .1, 1. };
 
 void Render::resizeScreen(int w, int h, float *p) {
+#ifndef VITA
 	glDisable(GL_LIGHTING);
+#endif
 	if (_fog) {
+#ifndef VITA // FIXME
 		glEnable(GL_FOG);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
 		glFogfv(GL_FOG_COLOR, _fogColor);
 		glFogf(GL_FOG_DENSITY, .35);
 		glFogf(GL_FOG_START, 16.);
 		glFogf(GL_FOG_END, 256.);
+#endif
 	}
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -384,9 +392,13 @@ void Render::drawParticle(const Vertex *pos, int color) {
 			warning("Render::drawParticle() unhandled color %d", color);
 		}
 	}
+#ifndef VITA // FIXME
 	glPointSize(4.);
+#endif
 	emitPoint3f(pos);
+#ifndef VITA // FIXME
 	glPointSize(1.);
+#endif
 	glColor4f(1., 1., 1., 1.);
 }
 
@@ -595,11 +607,13 @@ void Render::setupProjection(int mode) {
 	glScalef(1., -.5, -1.);
 	glRotatef(_cameraPitch, 0., 1., 0.);
 	glTranslatef(-_cameraPos.x, _cameraPos.y, -_cameraPos.z);
+#ifndef VITA // FIXME
 	if (_fog) {
 		glEnable(GL_FOG);
 	} else {
 		glDisable(GL_FOG);
 	}
+#endif
 }
 
 void Render::drawOverlay() {
@@ -634,7 +648,9 @@ const uint8_t *Render::captureScreen(int *w, int *h) {
 		_screenshotBuf = (uint8_t *)calloc(_w * _h, 4);
 	}
 	if (_screenshotBuf) {
+#ifndef VITA // FIXME
 		glReadPixels(0, 0, _w, _h, GL_RGBA, GL_UNSIGNED_BYTE, _screenshotBuf);
+#endif
 		*w = _w;
 		*h = _h;
 	}
