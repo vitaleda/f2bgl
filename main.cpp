@@ -159,6 +159,9 @@ static int transformPointerY(int y) {
 int main(int argc, char *argv[]) {
 #ifdef VITA
 	scePowerSetArmClockFrequency(444);
+	scePowerSetBusClockFrequency(222);
+	scePowerSetGpuClockFrequency(222);
+	scePowerSetGpuXbarClockFrequency(166);
 #endif
 	GameStub *stub = GameStub_create();
 	if (!stub) {
