@@ -17,7 +17,7 @@ project(${VITA_APPNAME})
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Flags and includes
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_GLES -DVITA -fno-exceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVITA -fno-exceptions")
 
 include_directories(
   ${VITASDK}/arm-vita-eabi/include/SDL2

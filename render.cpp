@@ -21,7 +21,7 @@ struct Vertex3f {
 	GLfloat x, y, z;
 };
 
-#ifdef USE_GLES
+#if defined(USE_GLES) || defined(VITA)
 
 #ifndef VITA
 #define glOrtho glOrthof
@@ -45,6 +45,12 @@ static GLfloat *bufferVertex(const Vertex *vertices, int count) {
 }
 #endif
 
+#ifdef VITA
+static void emitQuad2i(float x, float y, float w, float h) {
+	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
+	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+#else
 static void emitQuad2i(int x, int y, int w, int h) {
 #ifdef USE_GLES
 	GLfloat vertices[] = { x, y, x + w, y, x + w, y + h, x, y + h };
@@ -58,8 +64,16 @@ static void emitQuad2i(int x, int y, int w, int h) {
 		glVertex2i(x, y + h);
 	glEnd();
 #endif
+#endif
 }
 
+#ifdef VITA
+static void emitQuadTex2i(float x, float y, float w, float h, GLfloat *uv) {
+	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
+	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
+	vglTexCoordPointer(2, GL_FLOAT, 0, 4, uv);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+#else
 static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 #ifdef USE_GLES
 	GLfloat vertices[] = { x, y, x + w, y, x + w, y + h, x, y + h };
@@ -78,10 +92,15 @@ static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 		glVertex2i(x, y + h);
 	glEnd();
 #endif
+#endif
 }
 
 static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
-#ifdef USE_GLES
+#ifdef VITA
+	vglVertexPointer(3, GL_FLOAT, 0, 4, bufferVertex(vertices, 4));
+	vglTexCoordPointer(2, GL_FLOAT, 0, 4, uv);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+#elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 4));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -100,7 +119,11 @@ static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
 }
 
 static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
-#ifdef USE_GLES
+#ifdef VITA
+	vglVertexPointer(3, GL_FLOAT, 0, 3, bufferVertex(vertices, 3));
+	vglTexCoordPointer(2, GL_FLOAT, 0, 3, uv);
+	vglDrawObjects(GL_TRIANGLES, 3, GL_TRUE);
+#elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 3));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
 	glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -117,7 +140,10 @@ static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 }
 
 static void emitTriFan3i(const Vertex *vertices, int count) {
-#ifdef USE_GLES
+#ifdef VITA
+	vglVertexPointer(3, GL_FLOAT, 0, count, bufferVertex(vertices, count));
+	vglDrawObjects(GL_TRIANGLE_FAN, count, GL_TRUE);
+#elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, count));
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 #else
@@ -130,7 +156,10 @@ static void emitTriFan3i(const Vertex *vertices, int count) {
 }
 
 static void emitPoint3f(const Vertex *pos) {
-#ifdef USE_GLES
+#ifdef VITA
+	vglVertexPointer(3, GL_FLOAT, 0, 1, bufferVertex(pos, 1));
+	vglDrawObjects(GL_POINTS, 1, GL_TRUE);
+#elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(pos, 1));
 	glDrawArrays(GL_POINTS, 0, 1);
 #else
@@ -550,7 +579,7 @@ void Render::setPalette(const uint8_t *pal, int offset, int count) {
 void Render::clearScreen() {
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-#ifdef USE_GLES
+#if defined(USE_GLES) || defined(VITA)
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #endif

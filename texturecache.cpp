@@ -32,7 +32,7 @@ static const struct {
 #ifdef __amigaos4__
 	{ GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, &convert_BGRA_1555 },
 #endif
-#ifdef USE_GLES
+#if defined(USE_GLES) || defined(VITA)
 	{ GL_RGBA, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, &convert_RGBA_5551 },
 #else
 	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, &convert_RGBA_5551 },
@@ -69,7 +69,11 @@ TextureCache::TextureCache()
 	_texBuf = 0;
 	_npotTex = false;
 	_filter = GL_LINEAR;
+#ifdef VITA
+	_scaler = 1;
+#else
 	_scaler = 2;
+#endif
 }
 
 TextureCache::~TextureCache() {
