@@ -48,8 +48,10 @@ static GLfloat *bufferVertex(const Vertex *vertices, int count) {
 #ifdef VITA
 static void emitQuad2i(float x, float y, float w, float h) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
 	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #else
 static void emitQuad2i(int x, int y, int w, int h) {
 #ifdef USE_GLES
@@ -141,8 +143,10 @@ static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 
 static void emitTriFan3i(const Vertex *vertices, int count) {
 #ifdef VITA
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexPointer(3, GL_FLOAT, 0, count, bufferVertex(vertices, count));
 	vglDrawObjects(GL_TRIANGLE_FAN, count, GL_TRUE);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, count));
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -157,8 +161,10 @@ static void emitTriFan3i(const Vertex *vertices, int count) {
 
 static void emitPoint3f(const Vertex *pos) {
 #ifdef VITA
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexPointer(3, GL_FLOAT, 0, 1, bufferVertex(pos, 1));
 	vglDrawObjects(GL_POINTS, 1, GL_TRUE);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(pos, 1));
 	glDrawArrays(GL_POINTS, 0, 1);
