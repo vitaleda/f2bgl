@@ -11,6 +11,12 @@
 #include "render.h"
 #include "stub.h"
 
+#ifdef VITA
+#include <psp2/apputil.h>
+#include <psp2/system_param.h>
+#include <psp2/io/stat.h>
+#endif
+
 static const char *USAGE =
 	"Fade2Black/OpenGL\n"
 	"Usage: f2b [OPTIONS]...\n"
@@ -320,9 +326,35 @@ struct GameStub_F2B : GameStub {
 	}
 	virtual int init() {
 #ifdef VITA
-		// TODO: sceIoMkdir des deux chemins suivants
-		// TODO: détection la région à utiliser (voir ZeldaNSQ)
-		if (!fileInit(kFileLanguage_FR, kFileLanguage_FR, "ux0:data/f2bgl/data", "ux0:data/f2bgl/saves")) {
+		sceIoMkdir("ux0:data/f2bgl", 0777);
+		sceIoMkdir("ux0:data/f2bgl/data", 0777);
+		sceIoMkdir("ux0:data/f2bgl/saves", 0777);
+
+		SceAppUtilInitParam init;
+		SceAppUtilBootParam boot;
+		memset(&init, 0, sizeof(SceAppUtilInitParam));
+		memset(&boot, 0, sizeof(SceAppUtilBootParam));
+		sceAppUtilInit(&init, &boot);
+
+		int language = 0;
+		sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &language);
+		switch (language) {
+		case SCE_SYSTEM_PARAM_LANG_FRENCH:
+			_fileLanguage = _fileVoice = kFileLanguage_FR;
+			break;
+		case SCE_SYSTEM_PARAM_LANG_GERMAN:
+			_fileLanguage = _fileVoice = kFileLanguage_GR;
+			break;
+		case SCE_SYSTEM_PARAM_LANG_SPANISH:
+			_fileLanguage = kFileLanguage_SP;
+			break;
+		case SCE_SYSTEM_PARAM_LANG_ITALIAN:
+			_fileLanguage = kFileLanguage_IT;
+			break;
+		default:
+			break;
+		}
+		if (!fileInit(_fileLanguage, _fileVoice, "ux0:data/f2bgl/data", "ux0:data/f2bgl/saves")) {
 			warning("Unable to find datafiles");
 			return -2;
 		}
