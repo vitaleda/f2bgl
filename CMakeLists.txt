@@ -82,8 +82,8 @@ target_link_libraries(${VITA_APPNAME}
 vita_create_self(eboot.bin ${VITA_APPNAME} UNSAFE)
 vita_create_vpk(${VITA_APPNAME}.vpk ${VITA_TITLEID} eboot.bin
   NAME ${VITA_APPNAME}
-  #FILE res/icon0.png sce_sys/icon0.png
-  #FILE res/bg.png sce_sys/livearea/contents/bg.png
-  #FILE res/startup.png sce_sys/livearea/contents/startup.png
-  #FILE res/template.xml sce_sys/livearea/contents/template.xml
+  FILE res/icon0.png sce_sys/icon0.png
+  FILE res/bg.png sce_sys/livearea/contents/bg.png
+  FILE res/startup.png sce_sys/livearea/contents/startup.png
+  FILE res/template.xml sce_sys/livearea/contents/template.xml
 )
