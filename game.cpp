@@ -1367,7 +1367,7 @@ void Game::playMusic(int mode) {
 			_snd.stopMidi(_objectsPtrTable[kObjPtrWorld]->objKey, currentKey);
 		}
 		if (_snd._musicKey > 0) {
-			_snd.playMidi(_objectsPtrTable[kObjPtrWorld]->objKey, _snd._musicKey);
+			// VITA FIXME _snd.playMidi(_objectsPtrTable[kObjPtrWorld]->objKey, _snd._musicKey);
 			const uint8_t *p_sndtype = _res.getData(kResType_SND, _snd._musicKey, "SNDTYPE");
 			if (p_sndtype) {
 				_snd._musicMode = mode;
