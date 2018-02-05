@@ -14,8 +14,8 @@ static const char *kIconBmp = "icon.bmp";
 
 static const float kAspectRatio = 4 / 3.;
 
-static const int kDefaultW = 640;
-static const int kDefaultH = kDefaultW / kAspectRatio;
+static const int kDefaultW = 960; //640;
+static const int kDefaultH = 544; //kDefaultW / kAspectRatio;
 //static const int kDefaultH = kDefaultW / (16 / 9.);
 
 static int gWindowW = kDefaultW;
@@ -31,7 +31,12 @@ static const int kTickDuration = 40;
 static const int kJoystickIndex = 0;
 static const int kJoystickCommitValue = 16384;
 
+#ifdef VITA
+static const int kJoystickMapSize = 12;
+#else
 static const int kJoystickMapSize = 8;
+#endif
+
 static int gJoystickMap[kJoystickMapSize];
 
 static int gGamepadMap[SDL_CONTROLLER_BUTTON_MAX];
@@ -74,6 +79,21 @@ static void setupKeyMap() {
 	}
 	// joystick buttons
 	memset(gJoystickMap, 0, sizeof(gJoystickMap));
+#ifdef VITA
+	gJoystickMap[0] = kKeyCodeJ;		// Jump - Triangle
+	gJoystickMap[1] = kKeyCodeReturn;   // Enter / Reload - Circle
+	gJoystickMap[2] = kKeyCodeSpace;    // Use / Shoot - Cross
+	gJoystickMap[3] = kKeyCodeAlt;		// Draw gun - Square
+	gJoystickMap[4] = kKeyCodeTab;      // Inventory navigation / L trigger
+	gJoystickMap[5] = kKeyCodeShift;	// Inventory selection / R trigger
+	gJoystickMap[10] = kKeyCodeEscape;  // Open/Close saveload menu - Select
+	gJoystickMap[11] = kKeyCodeI;		// Open/Close inventory - Start
+
+	// Missings:
+	//  - kKeyCodeCtrl / Utiliser mines (autres armes secondaires ?)
+	//  - kKeyCodeJ / ?
+	//  - kKeyCodeU / ?
+#else
 	gJoystickMap[0] = kKeyCodeAlt;
 	gJoystickMap[1] = kKeyCodeShift;
 	gJoystickMap[2] = kKeyCodeCtrl;
@@ -82,6 +102,7 @@ static void setupKeyMap() {
 	gJoystickMap[5] = kKeyCodeI;
 	gJoystickMap[6] = kKeyCodeJ;
 	gJoystickMap[7] = kKeyCodeU;
+#endif
 	// gamecontroller buttons
 	memset(gGamepadMap, 0, sizeof(gGamepadMap));
 	gGamepadMap[SDL_CONTROLLER_BUTTON_A] = kKeyCodeAlt;
@@ -207,10 +228,12 @@ int main(int argc, char *argv[]) {
 	SDL_Joystick *joystick = 0;
 	SDL_GameController *controller = 0;
 	if (SDL_NumJoysticks() > 0) {
+#ifndef VITA
 		SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
 		if (SDL_IsGameController(kJoystickIndex)) {
 			controller = SDL_GameControllerOpen(kJoystickIndex);
 		}
+#endif
 		if (!controller) {
 			joystick = SDL_JoystickOpen(kJoystickIndex);
 		}
