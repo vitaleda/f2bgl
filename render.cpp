@@ -683,9 +683,7 @@ const uint8_t *Render::captureScreen(int *w, int *h) {
 		_screenshotBuf = (uint8_t *)calloc(_w * _h, 4);
 	}
 	if (_screenshotBuf) {
-#ifndef VITA // FIXME
 		glReadPixels(0, 0, _w, _h, GL_RGBA, GL_UNSIGNED_BYTE, _screenshotBuf);
-#endif
 		*w = _w;
 		*h = _h;
 	}
