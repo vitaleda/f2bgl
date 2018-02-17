@@ -4,7 +4,7 @@
  */
 
 #ifdef VITA
-#include <SDL_opengl.h>
+#include <vitaGL.h>
 #elif USE_GLES
 #include <GLES/gl.h>
 #else
@@ -584,7 +584,7 @@ void Render::setPalette(const uint8_t *pal, int offset, int count) {
 
 void Render::clearScreen() {
 	glClearColor(0, 0, 0, 1);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear((GLbitfield)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 #if defined(USE_GLES) || defined(VITA)
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);

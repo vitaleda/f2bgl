@@ -4,7 +4,7 @@
  */
 
 #ifdef VITA
-#include <SDL_opengl.h>
+#include <vitaGL.h>
 #elif USE_GLES
 #include <GLES/gl.h>
 #else
