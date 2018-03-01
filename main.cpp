@@ -26,7 +26,11 @@ static float _aspectRatio[4];
 static int gScale = 2;
 static int gSaveSlot = 1;
 
+#ifdef VITA
+static const int kTickDuration = 30;
+#else
 static const int kTickDuration = 40;
+#endif
 
 static const int kJoystickIndex = 0;
 static const int kJoystickCommitValue = 16384;
