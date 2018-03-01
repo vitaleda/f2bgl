@@ -474,7 +474,7 @@ struct GameStub_F2B : GameStub {
 			_g->inp.pointers[pointer][0].down = down != 0;
 		}
 	}
-	virtual void doTick(unsigned int ticks) {
+	virtual void doTick(unsigned int ticks, int *joystick) {
 		if (_nextState != _state) {
 			setState(_nextState);
 		}
@@ -507,6 +507,14 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateGame:
+#ifdef VITA
+			joystick[kButton_CIRCLE] = kKeyCodeReturn;
+			joystick[kButton_CROSS]  = kKeyCodeSpace;
+			joystick[kButton_DOWN]   = kKeyCodeU;
+			joystick[kButton_LEFT]   = 0;
+			joystick[kButton_UP]     = kKeyCodeCtrl;
+			joystick[kButton_RIGHT]  = 0;
+#endif
 			if (_g->_changeLevel) {
 				_g->_changeLevel = false;
 				_g->initLevel(true);
@@ -545,6 +553,14 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateMenu:
+#ifdef VITA
+			joystick[kButton_CIRCLE] = 0;
+			joystick[kButton_CROSS]  = kKeyCodeReturn;
+			joystick[kButton_DOWN]   = kKeyCodeDown;
+			joystick[kButton_LEFT]   = kKeyCodeLeft;
+			joystick[kButton_UP]     = kKeyCodeUp;
+			joystick[kButton_RIGHT]  = kKeyCodeRight;
+#endif
 			if (!_g->doMenu()) {
 				_nextState = kStateGame;
 			}

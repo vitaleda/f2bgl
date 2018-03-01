@@ -52,7 +52,7 @@ struct GameStub {
 	virtual StubMixProc getMixProc(int rate, int fmt, void (*lock)(int)) = 0;
 	virtual void queueKeyInput(int keycode, int pressed) = 0;
 	virtual void queueTouchInput(int pointer, int x, int y, int down) = 0;
-	virtual void doTick(unsigned int ticks) = 0;
+	virtual void doTick(unsigned int ticks, int *joystick) = 0;
 	virtual void initGL(int w, int h, float *ar) = 0;
 	virtual void drawGL() = 0;
 	virtual void loadState(int slot) = 0;

@@ -84,19 +84,16 @@ static void setupKeyMap() {
 	// joystick buttons
 	memset(gJoystickMap, 0, sizeof(gJoystickMap));
 #ifdef VITA
-	gJoystickMap[0] = kKeyCodeJ;		// Jump - Triangle
-	gJoystickMap[1] = kKeyCodeReturn;   // Enter / Reload - Circle
-	gJoystickMap[2] = kKeyCodeSpace;    // Use / Shoot - Cross
-	gJoystickMap[3] = kKeyCodeAlt;		// Draw gun - Square
-	gJoystickMap[4] = kKeyCodeTab;      // Inventory navigation / L trigger
-	gJoystickMap[5] = kKeyCodeShift;	// Inventory selection / R trigger
-	gJoystickMap[10] = kKeyCodeEscape;  // Open/Close saveload menu - Select
-	gJoystickMap[11] = kKeyCodeI;		// Open/Close inventory - Start
-
-	// Missings:
-	//  - kKeyCodeCtrl / Utiliser mines (autres armes secondaires ?)
-	//  - kKeyCodeJ / ?
-	//  - kKeyCodeU / ?
+	gJoystickMap[kButton_TRIANGLE] = kKeyCodeJ;      // Jump
+	gJoystickMap[kButton_CIRCLE]   = kKeyCodeReturn; // Enter / Reload gun
+	gJoystickMap[kButton_CROSS]    = kKeyCodeSpace;  // Use / Shoot
+	gJoystickMap[kButton_SQUARE]   = kKeyCodeAlt;    // Draw gun
+	gJoystickMap[kButton_LTRIGGER] = kKeyCodeTab;    // Inventory navigation
+	gJoystickMap[kButton_RTRIGGER] = kKeyCodeShift;  // Inventory selection
+	gJoystickMap[kButton_DOWN]     = kKeyCodeU;      // Use key
+	gJoystickMap[kButton_UP]       = kKeyCodeCtrl;   // Use secondary weapon
+	gJoystickMap[kButton_SELECT]   = kKeyCodeEscape; // Open/close saveload menu
+	gJoystickMap[kButton_START]    = kKeyCodeI;      // Open/close inventory
 #else
 	gJoystickMap[0] = kKeyCodeAlt;
 	gJoystickMap[1] = kKeyCodeShift;
@@ -410,7 +407,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (!paused) {
 			const unsigned int ticks = SDL_GetTicks();
-			stub->doTick(ticks);
+			stub->doTick(ticks, gJoystickMap);
 			stub->drawGL();
 			SDL_GL_SwapWindow(window);
 		}

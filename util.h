@@ -27,6 +27,21 @@ enum {
 	kDebug_INSTALL  = 1 << 9,
 };
 
+enum {
+	kButton_TRIANGLE,
+	kButton_CIRCLE,
+	kButton_CROSS,
+	kButton_SQUARE,
+	kButton_LTRIGGER,
+	kButton_RTRIGGER,
+	kButton_DOWN,
+	kButton_LEFT,
+	kButton_UP,
+	kButton_RIGHT,
+	kButton_SELECT,
+	kButton_START,
+};
+
 extern const char *g_caption;
 extern int g_utilDebugMask;
 
