@@ -3,7 +3,7 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#ifdef VITA
+#ifdef __vita__
 #include <vitaGL.h>
 #elif USE_GLES
 #include <GLES/gl.h>
@@ -21,9 +21,9 @@ struct Vertex3f {
 	GLfloat x, y, z;
 };
 
-#if defined(USE_GLES) || defined(VITA)
+#if defined(USE_GLES) || defined(__vita__)
 
-#ifndef VITA
+#ifndef __vita__
 #define glOrtho glOrthof
 #define glFrustum glFrustumf
 #define glFogi glFogf
@@ -45,7 +45,7 @@ static GLfloat *bufferVertex(const Vertex *vertices, int count) {
 }
 #endif
 
-#ifdef VITA
+#ifdef __vita__
 static void emitQuad2i(float x, float y, float w, float h) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -69,7 +69,7 @@ static void emitQuad2i(int x, int y, int w, int h) {
 #endif
 }
 
-#ifdef VITA
+#ifdef __vita__
 static void emitQuadTex2i(float x, float y, float w, float h, GLfloat *uv) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
 	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
@@ -98,7 +98,7 @@ static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 }
 
 static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
-#ifdef VITA
+#ifdef __vita__
 	vglVertexPointer(3, GL_FLOAT, 0, 4, bufferVertex(vertices, 4));
 	vglTexCoordPointer(2, GL_FLOAT, 0, 4, uv);
 	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
@@ -121,7 +121,7 @@ static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
 }
 
 static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
-#ifdef VITA
+#ifdef __vita__
 	vglVertexPointer(3, GL_FLOAT, 0, 3, bufferVertex(vertices, 3));
 	vglTexCoordPointer(2, GL_FLOAT, 0, 3, uv);
 	vglDrawObjects(GL_TRIANGLES, 3, GL_TRUE);
@@ -142,7 +142,7 @@ static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 }
 
 static void emitTriFan3i(const Vertex *vertices, int count) {
-#ifdef VITA
+#ifdef __vita__
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexPointer(3, GL_FLOAT, 0, count, bufferVertex(vertices, count));
 	vglDrawObjects(GL_TRIANGLE_FAN, count, GL_TRUE);
@@ -160,7 +160,7 @@ static void emitTriFan3i(const Vertex *vertices, int count) {
 }
 
 static void emitPoint3f(const Vertex *pos) {
-#ifdef VITA
+#ifdef __vita__
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexPointer(3, GL_FLOAT, 0, 1, bufferVertex(pos, 1));
 	vglDrawObjects(GL_POINTS, 1, GL_TRUE);
@@ -209,11 +209,11 @@ void Render::flushCachedTextures() {
 static const GLfloat _fogColor[4] = { .1, .1, .1, 1. };
 
 void Render::resizeScreen(int w, int h, float *p) {
-#ifndef VITA
+#ifndef __vita__
 	glDisable(GL_LIGHTING);
 #endif
 	if (_fog) {
-#ifndef VITA // FIXME
+#ifndef __vita__ // FIXME
 		glEnable(GL_FOG);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
 		glFogfv(GL_FOG_COLOR, _fogColor);
@@ -427,11 +427,11 @@ void Render::drawParticle(const Vertex *pos, int color) {
 			warning("Render::drawParticle() unhandled color %d", color);
 		}
 	}
-#ifndef VITA // FIXME
+#ifndef __vita__ // FIXME
 	glPointSize(4.);
 #endif
 	emitPoint3f(pos);
-#ifndef VITA // FIXME
+#ifndef __vita__ // FIXME
 	glPointSize(1.);
 #endif
 	glColor4f(1., 1., 1., 1.);
@@ -585,7 +585,7 @@ void Render::setPalette(const uint8_t *pal, int offset, int count) {
 void Render::clearScreen() {
 	glClearColor(0, 0, 0, 1);
 	glClear((GLbitfield)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-#if defined(USE_GLES) || defined(VITA)
+#if defined(USE_GLES) || defined(__vita__)
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #endif
@@ -642,7 +642,7 @@ void Render::setupProjection(int mode) {
 	glScalef(1., -.5, -1.);
 	glRotatef(_cameraPitch, 0., 1., 0.);
 	glTranslatef(-_cameraPos.x, _cameraPos.y, -_cameraPos.z);
-#ifndef VITA // FIXME
+#ifndef __vita__ // FIXME
 	if (_fog) {
 		glEnable(GL_FOG);
 	} else {

@@ -26,7 +26,7 @@ static float _aspectRatio[4];
 static int gScale = 2;
 static int gSaveSlot = 1;
 
-#ifdef VITA
+#ifdef __vita__
 static const int kTickDuration = 30;
 #else
 static const int kTickDuration = 40;
@@ -35,7 +35,7 @@ static const int kTickDuration = 40;
 static const int kJoystickIndex = 0;
 static const int kJoystickCommitValue = 16384;
 
-#ifdef VITA
+#ifdef __vita__
 static const int kJoystickMapSize = 12;
 #else
 static const int kJoystickMapSize = 8;
@@ -47,7 +47,7 @@ static int gGamepadMap[SDL_CONTROLLER_BUTTON_MAX];
 
 static int gKeyScancodeMap[512];
 
-#ifdef VITA
+#ifdef __vita__
 #include <psp2/power.h>
 int _newlib_heap_size_user = 192 * 1024 * 1024;
 #endif
@@ -83,7 +83,7 @@ static void setupKeyMap() {
 	}
 	// joystick buttons
 	memset(gJoystickMap, 0, sizeof(gJoystickMap));
-#ifdef VITA
+#ifdef __vita__
 	gJoystickMap[kButton_TRIANGLE] = kKeyCodeJ;      // Jump
 	gJoystickMap[kButton_CIRCLE]   = kKeyCodeReturn; // Enter / Reload gun
 	gJoystickMap[kButton_CROSS]    = kKeyCodeSpace;  // Use / Shoot
@@ -179,7 +179,7 @@ static int transformPointerY(int y) {
 }
 
 int main(int argc, char *argv[]) {
-#ifdef VITA
+#ifdef __vita__
 	scePowerSetArmClockFrequency(444);
 	scePowerSetBusClockFrequency(222);
 	scePowerSetGpuClockFrequency(222);
@@ -229,7 +229,7 @@ int main(int argc, char *argv[]) {
 	SDL_Joystick *joystick = 0;
 	SDL_GameController *controller = 0;
 	if (SDL_NumJoysticks() > 0) {
-#ifndef VITA
+#ifndef __vita__
 		SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
 		if (SDL_IsGameController(kJoystickIndex)) {
 			controller = SDL_GameControllerOpen(kJoystickIndex);

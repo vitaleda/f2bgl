@@ -11,7 +11,7 @@
 #include "render.h"
 #include "stub.h"
 
-#ifdef VITA
+#ifdef __vita__
 #include <psp2/apputil.h>
 #include <psp2/system_param.h>
 #include <psp2/io/stat.h>
@@ -325,7 +325,7 @@ struct GameStub_F2B : GameStub {
 		return _params.mouseMode || _params.touchMode;
 	}
 	virtual int init() {
-#ifdef VITA
+#ifdef __vita__
 		sceIoMkdir("ux0:data/f2bgl", 0777);
 		sceIoMkdir("ux0:data/f2bgl/data", 0777);
 		sceIoMkdir("ux0:data/f2bgl/saves", 0777);
@@ -507,7 +507,7 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateGame:
-#ifdef VITA
+#ifdef __vita__
 			joystick[kButton_CIRCLE] = kKeyCodeReturn;
 			joystick[kButton_CROSS]  = kKeyCodeSpace;
 			joystick[kButton_DOWN]   = kKeyCodeU;
@@ -553,7 +553,7 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateMenu:
-#ifdef VITA
+#ifdef __vita__
 			joystick[kButton_CIRCLE] = 0;
 			joystick[kButton_CROSS]  = kKeyCodeReturn;
 			joystick[kButton_DOWN]   = kKeyCodeDown;

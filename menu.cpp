@@ -82,9 +82,7 @@ void Game::initMenu() {
 	_saveLoadTexture.data = _render->captureScreen(&_saveLoadTexture.w, &_saveLoadTexture.h);
 	_render->prepareTextureRgb(_saveLoadTexture.data, _saveLoadTexture.w, _saveLoadTexture.h, kSaveLoadTexKey + texIndexLut[0]);
 
-#ifndef VITA // FIXME
 	_snd.playMidi("savemap.xmi");
-#endif
 	_resumeMusic = true;
 }
 
@@ -96,9 +94,7 @@ void Game::finiMenu() {
 		memset(&_saveLoadSlots[i].texture, 0, sizeof(_saveLoadSlots[i].texture));
 	}
 	if (_resumeMusic) {
-#ifndef VITA // FIXME
 		_snd.playMidi(_objectsPtrTable[kObjPtrWorld]->objKey, _snd._musicKey);
-#endif
 	}
 }
 

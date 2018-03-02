@@ -53,7 +53,7 @@ P(Byte,       int8_t)
 P(Byte,      uint8_t)
 P(Uint16LE,  int16_t)
 P(Uint16LE, uint16_t)
-#ifdef VITA
+#ifdef __vita__
 P(Uint32LE, int)
 #endif
 P(Uint32LE,  int32_t)

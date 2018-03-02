@@ -3,7 +3,7 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#ifdef VITA
+#ifdef __vita__
 #include <vitaGL.h>
 #elif USE_GLES
 #include <GLES/gl.h>
@@ -32,7 +32,7 @@ static const struct {
 #ifdef __amigaos4__
 	{ GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, &convert_BGRA_1555 },
 #endif
-#if defined(USE_GLES) || defined(VITA)
+#if defined(USE_GLES) || defined(__vita__)
 	{ GL_RGBA, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, &convert_RGBA_5551 },
 #else
 	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, &convert_RGBA_5551 },
@@ -69,7 +69,7 @@ TextureCache::TextureCache()
 	_texBuf = 0;
 	_npotTex = false;
 	_filter = GL_LINEAR;
-#ifdef VITA
+#ifdef __vita__
 	_scaler = 1;
 #else
 	_scaler = 2;
@@ -249,7 +249,7 @@ Texture *TextureCache::createTexture(const uint8_t *data, int w, int h, bool rgb
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
-#ifndef VITA // FIXME
+#ifndef __vita__ // FIXME
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 #endif
 		glTexImage2D(GL_TEXTURE_2D, 0, _formats[_fmt].internal, t->texW, t->texH, 0, _formats[_fmt].format, _formats[_fmt].type, texData);

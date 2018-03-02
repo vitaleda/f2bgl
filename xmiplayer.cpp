@@ -109,7 +109,7 @@ XmiPlayer *XmiPlayer_WildMidi_create(Resource *res) {
 // FluidSynth
 //
 
-#ifndef VITA
+#ifndef __vita__
 #include <fluidsynth.h>
 
 struct XmiEvent {

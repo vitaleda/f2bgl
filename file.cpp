@@ -3,7 +3,7 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#ifdef VITA
+#ifdef __vita__
 #include <psp2/io/dirent.h>
 #include <psp2/io/stat.h>
 #include <psp2/types.h>
@@ -153,7 +153,7 @@ struct FileSystem {
 		free(_fileList);
 	}
 	void buildFileListFromDirectory(const char *dir) {
-#ifdef VITA
+#ifdef __vita__
 		SceUID d = sceIoDopen(dir);
 		if (d) {
 			SceIoDirent de;

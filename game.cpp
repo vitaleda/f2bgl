@@ -1129,13 +1129,12 @@ void Game::init() {
 
 	// use GUS music resources if no soundfont is specified
 	const int midiType = _params.sf2 ? MIDI_AWE32 : MIDI_GUS;
-#ifdef VITA
-	_res.loadCustomGUS();
-	_snd._mix._xmiPlayer = XmiPlayer_WildMidi_create(&_res);
-#else
 	if (midiType == MIDI_GUS) {
 		_res.loadCustomGUS();
 		_snd._mix._xmiPlayer = XmiPlayer_WildMidi_create(&_res);
+#ifdef __vita__
+	}
+#else
 	} else {
 		_snd._mix._xmiPlayer = XmiPlayer_FluidSynth_create(_params.sf2);
 	}
@@ -1367,9 +1366,7 @@ void Game::playMusic(int mode) {
 			_snd.stopMidi(_objectsPtrTable[kObjPtrWorld]->objKey, currentKey);
 		}
 		if (_snd._musicKey > 0) {
-#ifndef VITA
 			_snd.playMidi(_objectsPtrTable[kObjPtrWorld]->objKey, _snd._musicKey);
-#endif
 			const uint8_t *p_sndtype = _res.getData(kResType_SND, _snd._musicKey, "SNDTYPE");
 			if (p_sndtype) {
 				_snd._musicMode = mode;

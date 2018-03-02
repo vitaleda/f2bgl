@@ -8,7 +8,7 @@
 #include <windows.h>
 #endif
 #include "util.h"
-#ifdef VITA
+#ifdef __vita__
 #include <psp2/kernel/clib.h>
 #define printf sceClibPrintf
 #define fprintf(x, ...) sceClibPrintf(__VA_ARGS__)
