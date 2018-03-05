@@ -82,7 +82,7 @@ struct Render {
 	void copyToOverlay(int x, int y, const uint8_t *data, int pitch, int w, int h, int transparentColor = -1);
 
 	void setPaletteScale(bool greyScale, int rgbScale);
-	void setPalette(const uint8_t *pal, int offset, int count);
+	void setPalette(const uint8_t *pal, int offset, int count, bool updateTextures = true);
 	void clearScreen();
 	void setupProjection(int mode);
 	void drawOverlay();

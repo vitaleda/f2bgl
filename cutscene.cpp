@@ -72,7 +72,11 @@ void Cutscene::updatePalette(int palType, int colorsCount, const uint8_t *p) {
 			}
 		}
 	}
+#ifdef __vita__
+	_render->setPalette(_palette, 0, 256, false);
+#else
 	_render->setPalette(_palette, 0, 256);
+#endif
 }
 
 static int decodeHuffman(const uint8_t *src, int srcSize, uint8_t *dst) {
