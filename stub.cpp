@@ -537,6 +537,14 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateInventory:
+#ifdef __vita__
+			joystick[kButton_CIRCLE] = 0;
+			joystick[kButton_CROSS]  = kKeyCodeReturn;
+			joystick[kButton_DOWN]   = kKeyCodeDown;
+			joystick[kButton_LEFT]   = kKeyCodeLeft;
+			joystick[kButton_UP]     = kKeyCodeUp;
+			joystick[kButton_RIGHT]  = kKeyCodeRight;
+#endif
 			_g->updateInventoryInput();
 			_g->doInventory();
 			if (_g->inp.inventoryKey || _g->inp.escapeKey) {

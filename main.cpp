@@ -88,8 +88,8 @@ static void setupKeyMap() {
 	gJoystickMap[kButton_CIRCLE]   = kKeyCodeReturn; // Enter / Reload gun
 	gJoystickMap[kButton_CROSS]    = kKeyCodeSpace;  // Use / Shoot
 	gJoystickMap[kButton_SQUARE]   = kKeyCodeAlt;    // Draw gun
-	gJoystickMap[kButton_LTRIGGER] = kKeyCodeTab;    // Inventory navigation
-	gJoystickMap[kButton_RTRIGGER] = kKeyCodeShift;  // Inventory selection
+	gJoystickMap[kButton_LTRIGGER] = kKeyCodeShift;  // Inventory selection
+	gJoystickMap[kButton_RTRIGGER] = kKeyCodeTab;    // Inventory navigation
 	gJoystickMap[kButton_DOWN]     = kKeyCodeU;      // Use key
 	gJoystickMap[kButton_UP]       = kKeyCodeCtrl;   // Use secondary weapon
 	gJoystickMap[kButton_SELECT]   = kKeyCodeEscape; // Open/close saveload menu
