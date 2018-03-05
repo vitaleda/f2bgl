@@ -206,13 +206,11 @@ bool Sound::isVoicePlaying(int16_t objKey) const {
 }
 
 void Sound::playMidi(int16_t objKey, int16_t sndKey) {
-#ifndef __vita__
 	const uint8_t *p_sndinfo = _res->getData(kResType_SND, sndKey, "SNDINFO");
 	if (p_sndinfo && READ_LE_UINT32(p_sndinfo + 32) == 2) {
 		debug(kDebug_SOUND, "Sound::playMidi() key %d '%s'", sndKey, (const char *)p_sndinfo);
 		playMidi((const char *)p_sndinfo);
 	}
-#endif
 }
 
 void Sound::stopMidi(int16_t objKey, int16_t sndKey) {

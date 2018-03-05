@@ -335,7 +335,9 @@ void Mixer::playXmi(File *f, int size) {
 	uint8_t *buf = (uint8_t *)malloc(size);
 	if (buf) {
 		fileRead(f, buf, size);
+#ifndef __vita__
 		_xmiPlayer->load(buf, size);
+#endif
 		free(buf);
 	}
 }
