@@ -2,6 +2,9 @@
 #include "file.h"
 #include "game.h"
 #include "render.h"
+#ifdef __vita__
+#include <vitaGL.h>
+#endif
 
 static const char *kFn_s = "f2bgl-level%s-%02d.%s";
 static const char *kMenuFn_s = "f2bgl-freesav%d.%s";
@@ -570,6 +573,9 @@ bool Game::loadGameState(int num) {
 		debug(kDebug_SAVELOAD, "level %d currentLevel %d", level, _level);
 		if (level != _level) {
 			_level = level;
+#ifdef __vita__
+			vglStopRendering();
+#endif
 			initLevel();
 		}
 		persistGameState<kModeLoad>(fp, *this);
