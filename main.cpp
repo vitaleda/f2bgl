@@ -92,8 +92,9 @@ static void setupKeyMap() {
 	gJoystickMap[kButton_RTRIGGER] = kKeyCodeTab;    // Inventory navigation
 	gJoystickMap[kButton_DOWN]     = kKeyCodeU;      // Use key
 	gJoystickMap[kButton_UP]       = kKeyCodeCtrl;   // Use secondary weapon
-	gJoystickMap[kButton_SELECT]   = kKeyCodeEscape; // Open/close saveload menu
-	gJoystickMap[kButton_START]    = kKeyCodeI;      // Open/close inventory
+	gJoystickMap[kButton_SELECT]   = kKeyCodeI;      // Open/close inventory
+	gJoystickMap[kButton_START]    = kKeyCodeEscape; // Open/close saveload menu
+
 #else
 	gJoystickMap[0] = kKeyCodeAlt;
 	gJoystickMap[1] = kKeyCodeShift;
