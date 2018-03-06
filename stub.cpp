@@ -508,12 +508,14 @@ struct GameStub_F2B : GameStub {
 			break;
 		case kStateGame:
 #ifdef __vita__
-			joystick[kButton_CIRCLE] = kKeyCodeReturn;
-			joystick[kButton_CROSS]  = kKeyCodeSpace;
-			joystick[kButton_DOWN]   = kKeyCodeU;
-			joystick[kButton_LEFT]   = 0;
-			joystick[kButton_UP]     = kKeyCodeCtrl;
-			joystick[kButton_RIGHT]  = 0;
+			joystick[kButton_CIRCLE]   = kKeyCodeReturn;
+			joystick[kButton_CROSS]    = kKeyCodeSpace;
+			joystick[kButton_DOWN]     = kKeyCodeU;
+			joystick[kButton_LEFT]     = 0;
+			joystick[kButton_UP]       = kKeyCodeCtrl;
+			joystick[kButton_RIGHT]    = 0;
+			joystick[kButton_LTRIGGER] = 0;
+			joystick[kButton_RTRIGGER] = kKeyCodeShift;
 #endif
 			if (_g->_changeLevel) {
 				_g->_changeLevel = false;
@@ -538,12 +540,14 @@ struct GameStub_F2B : GameStub {
 			break;
 		case kStateInventory:
 #ifdef __vita__
-			joystick[kButton_CIRCLE] = 0;
-			joystick[kButton_CROSS]  = kKeyCodeReturn;
-			joystick[kButton_DOWN]   = kKeyCodeDown;
-			joystick[kButton_LEFT]   = kKeyCodeLeft;
-			joystick[kButton_UP]     = kKeyCodeUp;
-			joystick[kButton_RIGHT]  = kKeyCodeRight;
+			joystick[kButton_CIRCLE]   = 0;
+			joystick[kButton_CROSS]    = kKeyCodeReturn;
+			joystick[kButton_DOWN]     = kKeyCodeDown;
+			joystick[kButton_LEFT]     = kKeyCodeLeft;
+			joystick[kButton_UP]       = kKeyCodeUp;
+			joystick[kButton_RIGHT]    = kKeyCodeRight;
+			joystick[kButton_LTRIGGER] = kKeyCodeShift;
+			joystick[kButton_RTRIGGER] = kKeyCodeTab;
 #endif
 			_g->updateInventoryInput();
 			_g->doInventory();
