@@ -21,6 +21,190 @@ struct Vertex3f {
 	GLfloat x, y, z;
 };
 
+#ifdef __vita__
+GLuint fs[2];
+GLuint vs[2];
+GLuint programs[2];
+
+void* GL_LoadShader(const char* filename, GLuint idx, GLboolean fragment){
+	FILE* f = fopen(filename, "rb");
+	fseek(f, 0, SEEK_END);
+	long int size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	void* res = malloc(size);
+	fread(res, 1, size, f);
+	fclose(f);
+	glShaderBinary(1, fragment ? &fs[idx] : &vs[idx], 0, res, size);
+	free(res);
+}
+
+static int state_mask = 0;
+static int texenv_mask = 0;
+static int texcoord_state = 0;
+static int alpha_state = 0;
+static int color_state = 0;
+GLint monocolor;
+GLint modulcolor[2];
+
+void GL_SetProgram(){
+	switch (state_mask + texenv_mask) {
+		case 0x00: // Everything off
+		case 0x04: // Modulate
+		case 0x08: // Alpha Test
+		case 0x0C: // Alpha Test + Modulate
+			glUseProgram(programs[NO_COLOR]);
+			break;
+		case 0x09: // Alpha Test + Texcoord
+		case 0x0B: // Alpha Test + Color + Texcoord
+			glUseProgram(programs[TEX2D_REPL_A]);
+			break;
+		default:
+			debug(kDebug_INFO, "Unknown program");
+			break;
+	}
+}
+
+void GL_EnableState(GLenum state) {
+	switch (state) {
+		case GL_TEXTURE_COORD_ARRAY:
+			if (!texcoord_state) {
+				state_mask += 0x01;
+				texcoord_state = 1;
+			}
+			break;
+		case GL_COLOR_ARRAY:
+			if (!color_state) {
+				state_mask += 0x02;
+				color_state = 1;
+			}
+			break;
+		case GL_MODULATE:
+			texenv_mask = 0x04;
+			break;
+		case GL_REPLACE:
+			texenv_mask = 0;
+			break;
+		case GL_ALPHA_TEST:
+			if (!alpha_state) {
+				state_mask += 0x08;
+				alpha_state = 1;
+			}
+			break;
+	}
+	GL_SetProgram();
+}
+
+void GL_DisableState(GLenum state) {
+	switch (state) {
+		case GL_TEXTURE_COORD_ARRAY:
+			if (texcoord_state) {
+				state_mask -= 0x01;
+				texcoord_state = 0;
+			}
+			break;
+		case GL_COLOR_ARRAY:
+			if (color_state) {
+				state_mask -= 0x02;
+				color_state = 0;
+			}
+			break;
+		case GL_ALPHA_TEST:
+			if (alpha_state) {
+				state_mask -= 0x08;
+				alpha_state = 0;
+			}
+			break;
+		default:
+			break;
+	}
+	GL_SetProgram();
+}
+
+static float cur_clr[4];
+
+void GL_DrawPolygon(GLenum prim, int num) {
+	if ((state_mask + texenv_mask) == 0x05) {
+		glUniform4fv(modulcolor[0], 1, cur_clr);
+	} else if ((state_mask + texenv_mask) == 0x0D) {
+		glUniform4fv(modulcolor[1], 1, cur_clr);
+	}
+	vglDrawObjects(prim, num, GL_TRUE);
+}
+
+void GL_Color(float r, float g, float b, float a) {
+	cur_clr[0] = r;
+	cur_clr[1] = g;
+	cur_clr[2] = b;
+	cur_clr[3] = a;
+}
+
+bool reset_shaders = false;
+bool shaders_set = false;
+
+void Render::GL_ResetShaders() {
+	glFinish();
+	int i;
+	if (shaders_set) {
+		for (i = 0; i < 2; i++) {
+			glDeleteProgram(programs[i]);
+		}
+		for (i = 0; i < 2; i++) {
+			glDeleteShader(fs[i]);
+		}
+		for (i = 0; i < 2; i++) {
+			glDeleteShader(vs[i]);
+		}
+	} else {
+		shaders_set = true;
+	}
+
+	// Loading shaders
+	for (i = 0; i < 2; i++) {
+		fs[i] = glCreateShader(GL_FRAGMENT_SHADER);
+	}
+	for (i = 0; i < 2; i++) {
+		vs[i] = glCreateShader(GL_VERTEX_SHADER);
+	}
+
+	if (_fog) {
+		GL_LoadShader("app0:shaders/replace_alpha_fog_f.gxp", REPLACE_A, GL_TRUE);
+		GL_LoadShader("app0:shaders/texture2d_fog_v.gxp", TEXTURE2D, GL_FALSE);
+		GL_LoadShader("app0:shaders/vertex_fog_f.gxp", MONO_COLOR, GL_TRUE);
+		GL_LoadShader("app0:shaders/vertex_fog_v.gxp", VERTEX_ONLY, GL_FALSE);
+	}else{
+		GL_LoadShader("app0:shaders/replace_alpha_f.gxp", REPLACE_A, GL_TRUE);
+		GL_LoadShader("app0:shaders/texture2d_v.gxp", TEXTURE2D, GL_FALSE);
+		GL_LoadShader("app0:shaders/vertex_f.gxp", MONO_COLOR, GL_TRUE);
+		GL_LoadShader("app0:shaders/vertex_v.gxp", VERTEX_ONLY, GL_FALSE);
+	}
+
+	// Setting up programs
+	for (i = 0; i < 2; i++) {
+		programs[i] = glCreateProgram();
+		switch (i) {
+			case NO_COLOR:
+				glAttachShader(programs[i], fs[MONO_COLOR]);
+				glAttachShader(programs[i], vs[VERTEX_ONLY]);
+				vglBindAttribLocation(programs[i], 0, "aPosition", 3, GL_FLOAT);
+				monocolor = glGetUniformLocation(programs[i], "color");
+				break;
+			case TEX2D_REPL_A:
+				glAttachShader(programs[i], fs[REPLACE_A]);
+				glAttachShader(programs[i], vs[TEXTURE2D]);
+				vglBindAttribLocation(programs[i], 0, "position", 3, GL_FLOAT);
+				vglBindAttribLocation(programs[i], 1, "texcoord", 2, GL_FLOAT);
+				break;
+			default:
+				debug(kDebug_INFO, "Unsupported program");
+				break;
+		}
+		glLinkProgram(programs[i]);
+	}
+}
+#else
+#define GL_Color glColor4f
+#endif
+
 #if defined(USE_GLES) || defined(__vita__)
 
 #ifndef __vita__
@@ -46,12 +230,13 @@ static GLfloat *bufferVertex(const Vertex *vertices, int count) {
 #endif
 
 #ifdef __vita__
-static void emitQuad2i(float x, float y, float w, float h) {
+static void emitQuad2i(float x, float y, float w, float h, GLfloat *color) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
-	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, vertices);
+	glUniform4fv(monocolor, 1, color);
+	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
+	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
 #else
 static void emitQuad2i(int x, int y, int w, int h) {
 #ifdef USE_GLES
@@ -72,9 +257,9 @@ static void emitQuad2i(int x, int y, int w, int h) {
 #ifdef __vita__
 static void emitQuadTex2i(float x, float y, float w, float h, GLfloat *uv) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
-	vglVertexPointer(3, GL_FLOAT, 0, 4, vertices);
-	vglTexCoordPointer(2, GL_FLOAT, 0, 4, uv);
-	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, vertices);
+	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 4, uv);
+	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
 #else
 static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 #ifdef USE_GLES
@@ -99,9 +284,9 @@ static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 
 static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
 #ifdef __vita__
-	vglVertexPointer(3, GL_FLOAT, 0, 4, bufferVertex(vertices, 4));
-	vglTexCoordPointer(2, GL_FLOAT, 0, 4, uv);
-	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, bufferVertex(vertices, 4));
+	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 4, uv);
+	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 4));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
@@ -122,9 +307,9 @@ static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
 
 static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 #ifdef __vita__
-	vglVertexPointer(3, GL_FLOAT, 0, 3, bufferVertex(vertices, 3));
-	vglTexCoordPointer(2, GL_FLOAT, 0, 3, uv);
-	vglDrawObjects(GL_TRIANGLES, 3, GL_TRUE);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 3, bufferVertex(vertices, 3));
+	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 3, uv);
+	GL_DrawPolygon(GL_TRIANGLES, 3);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 3));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
@@ -141,13 +326,16 @@ static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 #endif
 }
 
-static void emitTriFan3i(const Vertex *vertices, int count) {
 #ifdef __vita__
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	vglVertexPointer(3, GL_FLOAT, 0, count, bufferVertex(vertices, count));
-	vglDrawObjects(GL_TRIANGLE_FAN, count, GL_TRUE);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-#elif USE_GLES
+static void emitTriFan3i(const Vertex *vertices, int count, GLfloat *color) {
+	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, count, bufferVertex(vertices, count));
+	glUniform4fv(monocolor, 1, color);
+	GL_DrawPolygon(GL_TRIANGLE_FAN, count);
+	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
+#else
+static void emitTriFan3i(const Vertex *vertices, int count) {
+#ifdef USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, count));
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 #else
@@ -155,23 +343,28 @@ static void emitTriFan3i(const Vertex *vertices, int count) {
 		for (int i = 0; i < count; ++i) {
 			glVertex3i(vertices[i].x, vertices[i].y, vertices[i].z);
 		}
-        glEnd();
+	glEnd();
+#endif
 #endif
 }
 
-static void emitPoint3f(const Vertex *pos) {
 #ifdef __vita__
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	vglVertexPointer(3, GL_FLOAT, 0, 1, bufferVertex(pos, 1));
-	vglDrawObjects(GL_POINTS, 1, GL_TRUE);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-#elif USE_GLES
+static void emitPoint3f(const Vertex *pos, GLfloat *color) {
+	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
+	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 1, bufferVertex(pos, 1));
+	glUniform4fv(monocolor, 1, color);
+	GL_DrawPolygon(GL_POINTS, 1);
+	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
+#else
+static void emitPoint3f(const Vertex *pos) {
+#ifdef USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(pos, 1));
 	glDrawArrays(GL_POINTS, 0, 1);
 #else
 	glBegin(GL_POINTS);
 		glVertex3f(pos->x, pos->y, pos->z);
 	glEnd();
+#endif
 #endif
 }
 
@@ -192,8 +385,15 @@ Render::Render(const RenderParams *params) {
 	_textureCache.init(params->textureFilter, params->textureScaler);
 	_paletteGreyScale = false;
 	_paletteRgbScale = 256;
+#ifdef __vita__
+	_fog = true;
+#else
 	_fog = params->fog;
+#endif
 	_drawObjectIgnoreDepth = false;
+#ifdef __vita__
+	GL_ResetShaders();
+#endif
 }
 
 Render::~Render() {
@@ -213,7 +413,7 @@ void Render::resizeScreen(int w, int h, float *p) {
 	glDisable(GL_LIGHTING);
 #endif
 	if (_fog) {
-#ifndef __vita__ // FIXME
+#ifndef __vita__ // Use custom shaders instead
 		glEnable(GL_FOG);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
 		glFogfv(GL_FOG_COLOR, _fogColor);
@@ -225,7 +425,11 @@ void Render::resizeScreen(int w, int h, float *p) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_DEPTH_TEST);
+#ifdef __vita__
+	GL_EnableState(GL_ALPHA_TEST);
+#else
 	glEnable(GL_ALPHA_TEST);
+#endif
 	glAlphaFunc(GL_NOTEQUAL, 0.);
 	_w = w;
 	_h = h;
@@ -267,38 +471,44 @@ void Render::releaseTexture(int16_t texKey) {
 }
 
 void Render::drawPolygonFlat(const Vertex *vertices, int verticesCount, int color) {
+	float col[4];
 	switch (color) {
 	case kFlatColorRed:
-		glColor4f(1., 0., 0., .5);
+		col[0]=1.;col[1]=0.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorGreen:
-		glColor4f(0., 1., 0., .5);
+		col[0]=0.;col[1]=1.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorYellow:
-		glColor4f(1., 1., 0., .5);
+		col[0]=1.;col[1]=1.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorBlue:
-		glColor4f(0., 0., 1., .5);
+		col[0]=0.;col[1]=0.;col[2]=1.;col[3]=.5;
 		break;
 	case kFlatColorShadow:
-		glColor4f(0., 0., 0., .2);
+		col[0]=0.;col[1]=0.;col[2]=0.;col[3]=.2;
 		break;
 	case kFlatColorLight:
-		glColor4f(1., 1., 1., .2);
+		col[0]=1.;col[1]=1.;col[2]=1.;col[3]=.2;
 		break;
 	case kFlatColorLight9:
-		glColor4f(1., 1., 1., .5);
+		col[0]=1.;col[1]=1.;col[2]=1.;col[3]=.5;
 		break;
 	default:
 		if (color >= 0 && color < 256) {
-			glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+			col[0]=_pixelColorMap[0][color];col[1]=_pixelColorMap[1][color];col[2]=_pixelColorMap[2][color];col[3]=_pixelColorMap[3][color];
 		} else {
 			warning("Render::drawPolygonFlat() unhandled color %d", color);
 		}
 		break;
 	}
+#ifdef __vita__
+	emitTriFan3i(vertices, verticesCount, col);
+#else
+	glColor4f(col[0], col[1], col[2], col[3]);
 	emitTriFan3i(vertices, verticesCount);
-	glColor4f(1., 1., 1., 1.);
+#endif
+	GL_Color(1., 1., 1., 1.);
 }
 
 void Render::drawPolygonTexture(const Vertex *vertices, int verticesCount, int primitive, const uint8_t *texData, int texW, int texH, int16_t texKey) {
@@ -398,49 +608,53 @@ void Render::drawPolygonTexture(const Vertex *vertices, int verticesCount, int p
 }
 
 void Render::drawParticle(const Vertex *pos, int color) {
+	float col[4];
 	switch (color) {
 	case kFlatColorRed:
-		glColor4f(1., 0., 0., .5);
+		col[0]=1.;col[1]=0.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorGreen:
-		glColor4f(0., 1., 0., .5);
+		col[0]=0.;col[1]=1.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorYellow:
-		glColor4f(1., 1., 0., .5);
+		col[0]=1.;col[1]=1.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorBlue:
-		glColor4f(0., 0., 1., .5);
+		col[0]=0.;col[1]=0.;col[2]=1.;col[3]=.5;
 		break;
 	case kFlatColorShadow:
-		glColor4f(0., 0., 0., .5);
+		col[0]=0.;col[1]=0.;col[2]=0.;col[3]=.5;
 		break;
 	case kFlatColorLight:
-		glColor4f(1., 1., 1., .2);
+		col[0]=1.;col[1]=1.;col[2]=1.;col[3]=.2;
 		break;
 	case kFlatColorLight9:
-		glColor4f(1., 1., 1., .5);
+		col[0]=1.;col[1]=1.;col[2]=1.;col[3]=.5;
 		break;
 	default:
 		if (color >= 0 && color < 256) {
-			glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+			col[0]=_pixelColorMap[0][color];col[1]=_pixelColorMap[1][color];col[2]=_pixelColorMap[2][color];col[3]=_pixelColorMap[3][color];
 		} else {
 			warning("Render::drawParticle() unhandled color %d", color);
 		}
 	}
-#ifndef __vita__ // FIXME
+#ifdef __vita__
+	// FIXME glPointSize(4.);
+	emitPoint3f(pos, col);
+	// FIXME glPointSize(1.);
+#else
+	glColor4f(col[0], col[1], col[2], col[3]);
 	glPointSize(4.);
-#endif
 	emitPoint3f(pos);
-#ifndef __vita__ // FIXME
 	glPointSize(1.);
 #endif
-	glColor4f(1., 1., 1., 1.);
+	GL_Color(1., 1., 1., 1.);
 }
 
 void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH, int primitive, int16_t texKey, int transparentScale) {
 	glDisable(GL_DEPTH_TEST);
 	if (transparentScale != 256) {
-		glColor4f(1., 1., 1., transparentScale / 256.);
+		GL_Color(1., 1., 1., transparentScale / 256.);
 	}
 	glEnable(GL_TEXTURE_2D);
 	Texture *t = _textureCache.getCachedTexture(texKey, texData, texW, texH);
@@ -472,7 +686,7 @@ void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH
 	}
 	glDisable(GL_TEXTURE_2D);
 	if (transparentScale != 256) {
-		glColor4f(1., 1., 1., 1.);
+		GL_Color(1., 1., 1., 1.);
 	}
 	glEnable(GL_DEPTH_TEST);
 }
@@ -480,9 +694,14 @@ void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH
 void Render::drawRectangle(int x, int y, int w, int h, int color) {
 	glDisable(GL_DEPTH_TEST);
 	assert(color >= 0 && color < 256);
-	glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+#ifdef __vita__
+	float col[4] = {_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]};
+	emitQuad2i(x, y, w, h, col);
+#else
+	GL_Color(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
 	emitQuad2i(x, y, w, h);
-	glColor4f(1., 1., 1., 1.);
+#endif
+	GL_Color(1., 1., 1., 1.);
 	glEnable(GL_DEPTH_TEST);
 }
 
@@ -585,7 +804,9 @@ void Render::setPalette(const uint8_t *pal, int offset, int count, bool updateTe
 void Render::clearScreen() {
 	glClearColor(0, 0, 0, 1);
 	glClear((GLbitfield)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-#if defined(USE_GLES) || defined(__vita__)
+#ifdef __vita__
+    GL_EnableState(GL_TEXTURE_COORD_ARRAY);
+#elif USE_GLES
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 #endif
@@ -671,9 +892,14 @@ void Render::drawOverlay() {
 		glDisable(GL_TEXTURE_2D);
 	}
 	if (_overlay.r != 255 || _overlay.g != 255 || _overlay.b != 255) {
-		glColor4f(_overlay.r / 255., _overlay.g / 255., _overlay.b / 255., .8);
+#ifdef __vita__
+		float color[4] = {_overlay.r / 255.f, _overlay.g / 255.f, _overlay.b / 255.f, .8f};
+		emitQuad2i(-1, 0, 2, _h, color);
+#else
+		GL_Color(_overlay.r / 255.f, _overlay.g / 255.f, _overlay.b / 255.f, .8f);
 		emitQuad2i(-1, 0, 2, _h);
-		glColor4f(1., 1., 1., 1.);
+#endif
+		GL_Color(1., 1., 1., 1.);
 		_overlay.r = _overlay.g = _overlay.b = 255;
 	}
 }

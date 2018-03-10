@@ -86,4 +86,12 @@ vita_create_vpk(${VITA_APPNAME}.vpk ${VITA_TITLEID} eboot.bin
   FILE res/bg.png sce_sys/livearea/contents/bg.png
   FILE res/startup.png sce_sys/livearea/contents/startup.png
   FILE res/template.xml sce_sys/livearea/contents/template.xml
+  FILE res/shaders/replace_alpha_f.gxp shaders/replace_alpha_f.gxp
+  FILE res/shaders/replace_alpha_fog_f.gxp shaders/replace_alpha_fog_f.gxp
+  FILE res/shaders/texture2d_fog_v.gxp shaders/texture2d_fog_v.gxp
+  FILE res/shaders/texture2d_v.gxp shaders/texture2d_v.gxp
+  FILE res/shaders/vertex_f.gxp shaders/vertex_f.gxp
+  FILE res/shaders/vertex_fog_f.gxp shaders/vertex_fog_f.gxp
+  FILE res/shaders/vertex_fog_v.gxp shaders/vertex_fog_v.gxp
+  FILE res/shaders/vertex_v.gxp shaders/vertex_v.gxp
 )

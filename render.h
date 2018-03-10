@@ -8,6 +8,18 @@
 
 #include "util.h"
 
+#ifdef __vita__
+// Fragment shaders
+#define MONO_COLOR    0
+#define REPLACE_A     1
+// Vertex shaders
+#define TEXTURE2D     0
+#define VERTEX_ONLY   1
+// Shader programs
+#define NO_COLOR      0
+#define TEX2D_REPL_A  1
+#endif
+
 enum {
 	kFlatColorRed = 512,
 	kFlatColorGreen,
@@ -89,6 +101,10 @@ struct Render {
 	void resizeScreen(int w, int h, float *p);
 
 	const uint8_t *captureScreen(int *w, int *h);
+
+#ifdef __vita__
+	void GL_ResetShaders();
+#endif
 };
 
 #endif // RENDER_H__
