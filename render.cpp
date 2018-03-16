@@ -44,7 +44,7 @@ static int texcoord_state = 0;
 static int alpha_state = 0;
 static int color_state = 0;
 GLint monocolor;
-GLint modulcolor[2];
+GLint psize;
 
 void GL_SetProgram(){
 	switch (state_mask + texenv_mask) {
@@ -120,24 +120,6 @@ void GL_DisableState(GLenum state) {
 	GL_SetProgram();
 }
 
-static float cur_clr[4];
-
-void GL_DrawPolygon(GLenum prim, int num) {
-	if ((state_mask + texenv_mask) == 0x05) {
-		glUniform4fv(modulcolor[0], 1, cur_clr);
-	} else if ((state_mask + texenv_mask) == 0x0D) {
-		glUniform4fv(modulcolor[1], 1, cur_clr);
-	}
-	vglDrawObjects(prim, num, GL_TRUE);
-}
-
-void GL_Color(float r, float g, float b, float a) {
-	cur_clr[0] = r;
-	cur_clr[1] = g;
-	cur_clr[2] = b;
-	cur_clr[3] = a;
-}
-
 bool reset_shaders = false;
 bool shaders_set = false;
 
@@ -171,7 +153,7 @@ void Render::GL_ResetShaders() {
 		GL_LoadShader("app0:shaders/texture2d_fog_v.gxp", TEXTURE2D, GL_FALSE);
 		GL_LoadShader("app0:shaders/vertex_fog_f.gxp", MONO_COLOR, GL_TRUE);
 		GL_LoadShader("app0:shaders/vertex_fog_v.gxp", VERTEX_ONLY, GL_FALSE);
-	}else{
+	} else {
 		GL_LoadShader("app0:shaders/replace_alpha_f.gxp", REPLACE_A, GL_TRUE);
 		GL_LoadShader("app0:shaders/texture2d_v.gxp", TEXTURE2D, GL_FALSE);
 		GL_LoadShader("app0:shaders/vertex_f.gxp", MONO_COLOR, GL_TRUE);
@@ -186,6 +168,7 @@ void Render::GL_ResetShaders() {
 				glAttachShader(programs[i], fs[MONO_COLOR]);
 				glAttachShader(programs[i], vs[VERTEX_ONLY]);
 				vglBindAttribLocation(programs[i], 0, "aPosition", 3, GL_FLOAT);
+				psize = glGetUniformLocation(programs[i], "psize");
 				monocolor = glGetUniformLocation(programs[i], "color");
 				break;
 			case TEX2D_REPL_A:
@@ -201,8 +184,6 @@ void Render::GL_ResetShaders() {
 		glLinkProgram(programs[i]);
 	}
 }
-#else
-#define GL_Color glColor4f
 #endif
 
 #if defined(USE_GLES) || defined(__vita__)
@@ -235,7 +216,8 @@ static void emitQuad2i(float x, float y, float w, float h, GLfloat *color) {
 	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, vertices);
 	glUniform4fv(monocolor, 1, color);
-	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
+	glUniform1f(psize, 1.);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
 	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
 #else
 static void emitQuad2i(int x, int y, int w, int h) {
@@ -259,7 +241,7 @@ static void emitQuadTex2i(float x, float y, float w, float h, GLfloat *uv) {
 	GLfloat vertices[] = { x, y, 0, x + w, y, 0, x + w, y + h, 0, x, y + h, 0 };
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, vertices);
 	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 4, uv);
-	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
 #else
 static void emitQuadTex2i(int x, int y, int w, int h, GLfloat *uv) {
 #ifdef USE_GLES
@@ -286,7 +268,7 @@ static void emitQuadTex3i(const Vertex *vertices, GLfloat *uv) {
 #ifdef __vita__
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 4, bufferVertex(vertices, 4));
 	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 4, uv);
-	GL_DrawPolygon(GL_TRIANGLE_FAN, 4);
+	vglDrawObjects(GL_TRIANGLE_FAN, 4, GL_TRUE);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 4));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
@@ -309,7 +291,7 @@ static void emitTriTex3i(const Vertex *vertices, const GLfloat *uv) {
 #ifdef __vita__
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 3, bufferVertex(vertices, 3));
 	vglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 3, uv);
-	GL_DrawPolygon(GL_TRIANGLES, 3);
+	vglDrawObjects(GL_TRIANGLES, 3, GL_TRUE);
 #elif USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(vertices, 3));
 	glTexCoordPointer(2, GL_FLOAT, 0, uv);
@@ -331,7 +313,8 @@ static void emitTriFan3i(const Vertex *vertices, int count, GLfloat *color) {
 	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, count, bufferVertex(vertices, count));
 	glUniform4fv(monocolor, 1, color);
-	GL_DrawPolygon(GL_TRIANGLE_FAN, count);
+	glUniform1f(psize, 1.);
+	vglDrawObjects(GL_TRIANGLE_FAN, count, GL_TRUE);
 	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
 #else
 static void emitTriFan3i(const Vertex *vertices, int count) {
@@ -353,7 +336,8 @@ static void emitPoint3f(const Vertex *pos, GLfloat *color) {
 	GL_DisableState(GL_TEXTURE_COORD_ARRAY);
 	vglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 1, bufferVertex(pos, 1));
 	glUniform4fv(monocolor, 1, color);
-	GL_DrawPolygon(GL_POINTS, 1);
+	glUniform1f(psize, 4.);
+	vglDrawObjects(GL_POINTS, 1, GL_TRUE);
 	GL_EnableState(GL_TEXTURE_COORD_ARRAY);
 #else
 static void emitPoint3f(const Vertex *pos) {
@@ -508,7 +492,7 @@ void Render::drawPolygonFlat(const Vertex *vertices, int verticesCount, int colo
 	glColor4f(col[0], col[1], col[2], col[3]);
 	emitTriFan3i(vertices, verticesCount);
 #endif
-	GL_Color(1., 1., 1., 1.);
+	glColor4f(1., 1., 1., 1.);
 }
 
 void Render::drawPolygonTexture(const Vertex *vertices, int verticesCount, int primitive, const uint8_t *texData, int texW, int texH, int16_t texKey) {
@@ -639,22 +623,20 @@ void Render::drawParticle(const Vertex *pos, int color) {
 		}
 	}
 #ifdef __vita__
-	// FIXME glPointSize(4.);
 	emitPoint3f(pos, col);
-	// FIXME glPointSize(1.);
 #else
 	glColor4f(col[0], col[1], col[2], col[3]);
 	glPointSize(4.);
 	emitPoint3f(pos);
 	glPointSize(1.);
 #endif
-	GL_Color(1., 1., 1., 1.);
+	glColor4f(1., 1., 1., 1.);
 }
 
 void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH, int primitive, int16_t texKey, int transparentScale) {
 	glDisable(GL_DEPTH_TEST);
 	if (transparentScale != 256) {
-		GL_Color(1., 1., 1., transparentScale / 256.);
+		glColor4f(1., 1., 1., transparentScale / 256.);
 	}
 	glEnable(GL_TEXTURE_2D);
 	Texture *t = _textureCache.getCachedTexture(texKey, texData, texW, texH);
@@ -686,7 +668,7 @@ void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH
 	}
 	glDisable(GL_TEXTURE_2D);
 	if (transparentScale != 256) {
-		GL_Color(1., 1., 1., 1.);
+		glColor4f(1., 1., 1., 1.);
 	}
 	glEnable(GL_DEPTH_TEST);
 }
@@ -698,10 +680,10 @@ void Render::drawRectangle(int x, int y, int w, int h, int color) {
 	float col[4] = {_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]};
 	emitQuad2i(x, y, w, h, col);
 #else
-	GL_Color(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+	glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
 	emitQuad2i(x, y, w, h);
 #endif
-	GL_Color(1., 1., 1., 1.);
+	glColor4f(1., 1., 1., 1.);
 	glEnable(GL_DEPTH_TEST);
 }
 
@@ -896,10 +878,10 @@ void Render::drawOverlay() {
 		float color[4] = {_overlay.r / 255.f, _overlay.g / 255.f, _overlay.b / 255.f, .8f};
 		emitQuad2i(-1, 0, 2, _h, color);
 #else
-		GL_Color(_overlay.r / 255.f, _overlay.g / 255.f, _overlay.b / 255.f, .8f);
+		glColor4f(_overlay.r / 255.f, _overlay.g / 255.f, _overlay.b / 255.f, .8f);
 		emitQuad2i(-1, 0, 2, _h);
 #endif
-		GL_Color(1., 1., 1., 1.);
+		glColor4f(1., 1., 1., 1.);
 		_overlay.r = _overlay.g = _overlay.b = 255;
 	}
 }
