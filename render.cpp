@@ -393,11 +393,11 @@ void Render::flushCachedTextures() {
 static const GLfloat _fogColor[4] = { .1, .1, .1, 1. };
 
 void Render::resizeScreen(int w, int h, float *p) {
-#ifndef __vita__
+#ifndef __vita__ // FIXME
 	glDisable(GL_LIGHTING);
 #endif
 	if (_fog) {
-#ifndef __vita__ // Use custom shaders instead
+#ifndef __vita__ // Custom shaders
 		glEnable(GL_FOG);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
 		glFogfv(GL_FOG_COLOR, _fogColor);
@@ -845,7 +845,7 @@ void Render::setupProjection(int mode) {
 	glScalef(1., -.5, -1.);
 	glRotatef(_cameraPitch, 0., 1., 0.);
 	glTranslatef(-_cameraPos.x, _cameraPos.y, -_cameraPos.z);
-#ifndef __vita__ // FIXME
+#ifndef __vita__ // Custom shaders
 	if (_fog) {
 		glEnable(GL_FOG);
 	} else {

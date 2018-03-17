@@ -4,7 +4,7 @@ float4 main(
 	) : COLOR
 {
 	float4 c = color;
-	c.rgb = color.rgb * vFog;
+	c.rgb = color.rgb * vFog + float3(.1, .1, .1) * (1 - vFog);
 
 	return c;
 }

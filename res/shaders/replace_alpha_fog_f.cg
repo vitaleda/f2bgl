@@ -6,7 +6,7 @@ float4 main(
 {
 	float4 c = tex2D(tex, vTexcoord);
 
-	c.rgb = c.rgb * vFog;
+	c.rgb = c.rgb * vFog + float3(.1, .1, .1) * (1 - vFog);
 
 	if (c.a > 0.666) return c;
 	else discard;
