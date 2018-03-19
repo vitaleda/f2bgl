@@ -17,6 +17,7 @@ project(${VITA_APPNAME})
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Flags and includes
+set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -mtune=cortex-a9 -fno-exceptions")
 
 include_directories(
