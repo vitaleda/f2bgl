@@ -52,6 +52,7 @@ static int gKeyScancodeMap[512];
 int _newlib_heap_size_user = 192 * 1024 * 1024;
 int _vgl_max_indices = 256;
 int _vgl_gpu_pool_size = 0x800000;
+int _vgl_use_vram = 0;
 #endif
 
 static void setupKeyMap() {
