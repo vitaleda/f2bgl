@@ -5,6 +5,8 @@
 
 #ifdef USE_GLES
 #include <GLES/gl.h>
+#elif __SWITCH__
+#include "glad.h"
 #else
 #include <SDL_opengl.h>
 #endif
@@ -508,7 +510,7 @@ void Render::setPaletteScale(bool greyScale, int rgbScale) {
 	_paletteRgbScale = rgbScale;
 }
 
-void Render::setPalette(const uint8_t *pal, int offset, int count) {
+void Render::setPalette(const uint8_t *pal, int offset, int count, bool updateTextures) {
 	for (int i = 0; i < count; ++i) {
 		int r = pal[0];
 		int g = pal[1];
@@ -532,7 +534,7 @@ void Render::setPalette(const uint8_t *pal, int offset, int count) {
 		_pixelColorMap[3][j] = (j == 0) ? 0. : 1.;
 		pal += 3;
 	}
-	_textureCache.setPalette(_clut);
+	_textureCache.setPalette(_clut, updateTextures);
 }
 
 void Render::clearScreen() {

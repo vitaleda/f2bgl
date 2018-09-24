@@ -6,6 +6,11 @@
 #include <SDL.h>
 #include <string.h>
 #include "stub.h"
+#include "util.h"
+#ifdef __SWITCH__
+#include <switch.h>
+#include "glad.h"
+#endif
 
 const char *g_caption = "Fade2Black/OpenGL";
 
@@ -13,7 +18,11 @@ static const char *kIconBmp = "icon.bmp";
 
 static const float kAspectRatio = 4 / 3.;
 
+#ifdef __SWITCH__
+static const int kDefaultW = 1280;
+#else
 static const int kDefaultW = 640;
+#endif
 static const int kDefaultH = kDefaultW / kAspectRatio;
 //static const int kDefaultH = kDefaultW / (16 / 9.);
 
@@ -25,12 +34,20 @@ static float _aspectRatio[4];
 static int gScale = 2;
 static int gSaveSlot = 1;
 
+#ifdef __SWITCH__
+static const int kTickDuration = 30;
+#else
 static const int kTickDuration = 40;
+#endif
 
 static const int kJoystickIndex = 0;
 static const int kJoystickCommitValue = 16384;
 
+#ifdef __SWITCH__
+static const int kJoystickMapSize = 16;
+#else
 static const int kJoystickMapSize = 8;
+#endif
 static int gJoystickMap[kJoystickMapSize];
 
 static int gGamepadMap[SDL_CONTROLLER_BUTTON_MAX];
@@ -68,6 +85,22 @@ static void setupKeyMap() {
 	}
 	// joystick buttons
 	memset(gJoystickMap, 0, sizeof(gJoystickMap));
+#ifdef __SWITCH__
+	gJoystickMap[kButton_X]        = kKeyCodeJ;      // Jump
+	gJoystickMap[kButton_Y]        = kKeyCodeReturn; // Enter / Reload gun
+	gJoystickMap[kButton_A]        = kKeyCodeSpace;  // Use / Shoot
+	gJoystickMap[kButton_B]        = kKeyCodeAlt;    // Draw gun
+	gJoystickMap[kButton_L]        = kKeyCodeTab;    // Inventory navigation
+	gJoystickMap[kButton_R]        = kKeyCodeShift;  // Inventory selection
+	gJoystickMap[kButton_ZL]       = kKeyCodeU;      // Use object
+	gJoystickMap[kButton_ZR]       = kKeyCodeCtrl;   // Use secondary weapon
+	gJoystickMap[kButton_MINUS]    = kKeyCodeI;      // Open/close inventory
+	gJoystickMap[kButton_PLUS]     = kKeyCodeEscape; // Open/close saveload menu
+	gJoystickMap[kButton_UP]       = kKeyCodeUp;
+	gJoystickMap[kButton_DOWN]     = kKeyCodeDown;
+	gJoystickMap[kButton_LEFT]     = kKeyCodeLeft;
+	gJoystickMap[kButton_RIGHT]    = kKeyCodeRight;
+#else
 	gJoystickMap[0] = kKeyCodeAlt;
 	gJoystickMap[1] = kKeyCodeShift;
 	gJoystickMap[2] = kKeyCodeCtrl;
@@ -76,6 +109,7 @@ static void setupKeyMap() {
 	gJoystickMap[5] = kKeyCodeI;
 	gJoystickMap[6] = kKeyCodeJ;
 	gJoystickMap[7] = kKeyCodeU;
+#endif
 	// gamecontroller buttons
 	memset(gGamepadMap, 0, sizeof(gGamepadMap));
 	gGamepadMap[SDL_CONTROLLER_BUTTON_A] = kKeyCodeAlt;
@@ -151,6 +185,10 @@ static int transformPointerY(int y) {
 }
 
 int main(int argc, char *argv[]) {
+#ifdef __SWITCH__
+	socketInitializeDefault();
+	nxlinkStdio();
+#endif
 	GameStub *stub = GameStub_create();
 	if (!stub) {
 		return -1;
@@ -162,10 +200,16 @@ int main(int argc, char *argv[]) {
 	const int displayMode = stub->getDisplayMode();
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 	SDL_ShowCursor(stub->hasCursor() ? SDL_ENABLE : SDL_DISABLE);
+#ifdef __SWITCH__
+	int flags = SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN;
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#else
 	int flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
 	if (displayMode != kDisplayModeWindowed) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
+#endif
 	SDL_Window *window = SDL_CreateWindow(g_caption, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, gWindowW, gWindowH, flags);
 	if (!window) {
 		return -1;
@@ -184,7 +228,11 @@ int main(int argc, char *argv[]) {
 		setAspectRatio(gWindowW, gWindowH);
 	}
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
+#ifdef __SWITCH__
+	gladLoadGLLoader(SDL_GL_GetProcAddress);
+#else
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#endif
 	SDL_GL_SetSwapInterval(1);
 	ret = stub->init();
 	if (ret != 0) {
@@ -195,10 +243,12 @@ int main(int argc, char *argv[]) {
 	SDL_Joystick *joystick = 0;
 	SDL_GameController *controller = 0;
 	if (SDL_NumJoysticks() > 0) {
+#ifndef __SWITCH__
 		SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
 		if (SDL_IsGameController(kJoystickIndex)) {
 			controller = SDL_GameControllerOpen(kJoystickIndex);
 		}
+#endif
 		if (!controller) {
 			joystick = SDL_JoystickOpen(kJoystickIndex);
 		}
@@ -371,7 +421,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (!paused) {
 			const unsigned int ticks = SDL_GetTicks();
-			stub->doTick(ticks);
+			stub->doTick(ticks, gJoystickMap);
 			stub->drawGL();
 			SDL_GL_SwapWindow(window);
 		}

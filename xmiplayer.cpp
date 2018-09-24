@@ -63,7 +63,7 @@ struct XmiPlayer_WildMidi : XmiPlayer {
 				fileClose(fp);
 			}
 		}
-		const int ret = WildMidi_Init(path, mixingRate, WM_MO_ENHANCED_RESAMPLING);
+		const int ret = WildMidi_Init(path, mixingRate, WM_MO_LOG_VOLUME);
 		debug(kDebug_XMIDI, "WildMidi_Init() path '%s' ret %d", path, ret);
 		if (ret != 0) {
 			const char *err = WildMidi_GetError();
@@ -109,6 +109,7 @@ XmiPlayer *XmiPlayer_WildMidi_create(Resource *res) {
 // FluidSynth
 //
 
+#ifndef __SWITCH__
 #include <fluidsynth.h>
 
 struct XmiEvent {
@@ -457,3 +458,4 @@ struct XmiPlayer_FluidSynth : XmiPlayer {
 XmiPlayer *XmiPlayer_FluidSynth_create(const char *sfPath) {
 	return new XmiPlayer_FluidSynth(sfPath);
 }
+#endif

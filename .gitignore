@@ -1,0 +1,5 @@
+*.d
+*.o
+build
+f2bgl
+wildmidi.cfg

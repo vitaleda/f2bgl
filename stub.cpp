@@ -10,6 +10,9 @@
 #include "sound.h"
 #include "render.h"
 #include "stub.h"
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 static const char *USAGE =
 	"Fade2Black/OpenGL\n"
@@ -319,7 +322,30 @@ struct GameStub_F2B : GameStub {
 		return _params.mouseMode || _params.touchMode;
 	}
 	virtual int init() {
-		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : ".", _savePath ? _savePath : ".")) {
+#ifdef __SWITCH__
+		u64 tlc = 0;
+		s32 lc = 0;
+		setInitialize();
+		setGetSystemLanguage(&tlc);
+		setMakeLanguage(tlc, &lc);
+		switch (lc) {
+		case SetLanguage_FR:
+			_fileLanguage = _fileVoice = kFileLanguage_FR;
+			break;
+		case SetLanguage_DE:
+			_fileLanguage = _fileVoice = kFileLanguage_GR;
+			break;
+		case SetLanguage_ES:
+			_fileLanguage = kFileLanguage_SP;
+			break;
+		case SetLanguage_IT:
+			_fileLanguage = kFileLanguage_IT;
+			break;
+		default:
+			break;
+		}
+#endif
+		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : "data", _savePath ? _savePath : ".")) {
 			warning("Unable to find datafiles");
 			return -2;
 		}
@@ -433,7 +459,7 @@ struct GameStub_F2B : GameStub {
 			_g->inp.pointers[pointer][0].down = down != 0;
 		}
 	}
-	virtual void doTick(unsigned int ticks) {
+	virtual void doTick(unsigned int ticks, int *joystick) {
 		if (_nextState != _state) {
 			setState(_nextState);
 		}
@@ -466,6 +492,10 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateGame:
+#ifdef __SWITCH__
+			joystick[kButton_Y] = kKeyCodeReturn;
+			joystick[kButton_A] = kKeyCodeSpace;
+#endif
 			if (_g->_changeLevel) {
 				_g->_changeLevel = false;
 				_g->initLevel(true);
@@ -488,6 +518,10 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateInventory:
+#ifdef __SWITCH__
+			joystick[kButton_Y] = 0;
+			joystick[kButton_A] = kKeyCodeReturn;
+#endif
 			_g->updateInventoryInput();
 			_g->doInventory();
 			if (_g->inp.inventoryKey || _g->inp.escapeKey) {
@@ -504,6 +538,10 @@ struct GameStub_F2B : GameStub {
 			}
 			break;
 		case kStateMenu:
+#ifdef __SWITCH__
+			joystick[kButton_Y] = 0;
+			joystick[kButton_A] = kKeyCodeReturn;
+#endif
 			if (!_g->doMenu()) {
 				_nextState = kStateGame;
 			}
