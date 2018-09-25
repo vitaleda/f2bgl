@@ -402,6 +402,9 @@ void Resource::loadLevelData(const char *levelName, int levelNum) {
 				if (node->data) {
 					fileSetPos(fp, node->dataOffset, kFilePosition_SET);
 					fileRead(fp, node->data, node->dataSize);
+					if (g_isDemo && _resLoadDataTable[i].convert) {
+						node->data = _resLoadDataTable[i].convert(node->data, &node->dataSize);
+					}
 				}
 			}
 		}
