@@ -148,8 +148,14 @@ static void setupAudio(GameStub *stub) {
 	if (mix.proc) {
 		desired.callback = mix.proc;
 		desired.userdata = mix.data;
+#ifdef __SWITCH__
+		SDL_AudioDeviceID device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+		if (device != 0) {
+			SDL_PauseAudioDevice(device, 0);
+#else
 		if (SDL_OpenAudio(&desired, &obtained) == 0) {
 			SDL_PauseAudio(0);
+#endif
 		}
 	}
 }
