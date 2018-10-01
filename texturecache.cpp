@@ -114,9 +114,6 @@ void TextureCache::init(const char *filter, const char *scaler) {
 
 void TextureCache::flush() {
 	Texture *t = _texturesListHead;
-#ifdef __SWITCH__
-	glFinish();
-#endif
 	while (t) {
 		Texture *next = t->next;
 		glDeleteTextures(1, &t->id);
@@ -264,9 +261,6 @@ Texture *TextureCache::createTexture(const uint8_t *data, int w, int h, bool rgb
 }
 
 void TextureCache::destroyTexture(Texture *texture) {
-#ifdef __SWITCH__
-	glFinish();
-#endif
 	glDeleteTextures(1, &texture->id);
 	free(texture->bitmapData);
 	if (texture == _texturesListHead) {
