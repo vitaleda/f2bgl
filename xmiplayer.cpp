@@ -109,7 +109,6 @@ XmiPlayer *XmiPlayer_WildMidi_create(Resource *res) {
 // FluidSynth
 //
 
-#ifndef __SWITCH__
 #include <fluidsynth.h>
 
 struct XmiEvent {
@@ -458,4 +457,3 @@ struct XmiPlayer_FluidSynth : XmiPlayer {
 XmiPlayer *XmiPlayer_FluidSynth_create(const char *sfPath) {
 	return new XmiPlayer_FluidSynth(sfPath);
 }
-#endif

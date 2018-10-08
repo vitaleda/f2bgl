@@ -29,6 +29,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}.elf
   glapi
   drm_nouveau
   WildMidi
+  fluidsynth
   z
   nx
   m
