@@ -346,6 +346,7 @@ struct GameStub_F2B : GameStub {
 		}
 		_soundFont = strdup("/soundfonts/default.sf2");
 		_params.sf2 = _soundFont;
+		_renderParams.fog = true;
 #endif
 		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : "data", _savePath ? _savePath : ".")) {
 			warning("Unable to find datafiles");

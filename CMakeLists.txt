@@ -24,7 +24,6 @@ add_executable(${CMAKE_PROJECT_NAME}.elf
 
 target_link_libraries(${CMAKE_PROJECT_NAME}.elf
   SDL2
-  glad
   EGL
   glapi
   drm_nouveau

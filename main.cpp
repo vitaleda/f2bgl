@@ -231,7 +231,11 @@ int main(int argc, char *argv[]) {
 	_aspectRatio[2] = 1.;
 	_aspectRatio[3] = 1.;
 	if (displayMode != kDisplayModeFullscreenStretch) {
+#ifdef __SWITCH__
+		setAspectRatio(4, 3);
+#else
 		setAspectRatio(gWindowW, gWindowH);
+#endif
 	}
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
 #ifdef __SWITCH__
