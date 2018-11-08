@@ -367,6 +367,11 @@ int main(int argc, char *argv[]) {
 			case SDL_JOYBUTTONUP:
 				if (joystick) {
 					if (ev.jbutton.button >= 0 && ev.jbutton.button < kJoystickMapSize) {
+#ifdef __SWITCH__
+						if (ev.jbutton.button == kButton_RSTICK) {
+							quitGame = true;
+						}
+#endif
 						if (gJoystickMap[ev.jbutton.button] != 0) {
 							stub->queueKeyInput(gJoystickMap[ev.jbutton.button], ev.jbutton.state == SDL_PRESSED);
 						}
@@ -448,5 +453,8 @@ int main(int argc, char *argv[]) {
 		SDL_JoystickClose(joystick);
 	}
 	SDL_Quit();
+#ifdef __SWITCH__
+	socketExit();
+#endif
 	return 0;
 }
