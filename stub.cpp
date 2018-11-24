@@ -12,6 +12,7 @@
 #include "stub.h"
 #ifdef __SWITCH__
 #include <switch.h>
+#include <unistd.h>
 #endif
 
 static const char *USAGE =
@@ -344,8 +345,10 @@ struct GameStub_F2B : GameStub {
 		default:
 			break;
 		}
-		_soundFont = strdup("/soundfonts/default.sf2");
-		_params.sf2 = _soundFont;
+		_soundFont = strdup("f2bgl.sf2");
+		if (access(_soundFont, F_OK) != -1) {
+			_params.sf2 = _soundFont;
+		}
 		_renderParams.fog = true;
 #endif
 		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : "data", _savePath ? _savePath : ".")) {
