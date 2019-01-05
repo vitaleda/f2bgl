@@ -190,10 +190,10 @@ void Render::resizeScreen(int w, int h, float *p) {
 	_h = h;
 	_aspectRatio = p[2] / p[3];
 #ifdef __SWITCH__
-	_viewport.x = 160;
+	_viewport.w = h * 4 / 3;
+	_viewport.h = h;
+	_viewport.x = (w - _viewport.w) / 2;
 	_viewport.y = 0;
-	_viewport.w = 960;
-	_viewport.h = 720;
 #else
 	_viewport.x = 0;
 	_viewport.y = 0;
