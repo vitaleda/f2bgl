@@ -27,7 +27,7 @@ static int gScale = 2;
 static int gSaveSlot = 1;
 
 #ifdef __vita__
-static const int kTickDuration = 30;
+static const int kTickDuration = 35;
 #else
 static const int kTickDuration = 40;
 #endif

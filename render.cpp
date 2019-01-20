@@ -26,7 +26,7 @@ GLuint fs[2];
 GLuint vs[2];
 GLuint programs[2];
 
-void* GL_LoadShader(const char* filename, GLuint idx, GLboolean fragment){
+void GL_LoadShader(const char* filename, GLuint idx, GLboolean fragment){
 	FILE* f = fopen(filename, "rb");
 	fseek(f, 0, SEEK_END);
 	long int size = ftell(f);
