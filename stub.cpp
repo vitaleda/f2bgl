@@ -324,12 +324,12 @@ struct GameStub_F2B : GameStub {
 	}
 	virtual int init() {
 #ifdef __SWITCH__
-		u64 tlc = 0;
-		s32 lc = 0;
+		u64 languageCode = 0;
+		SetLanguage language = SetLanguage_ENUS;
 		setInitialize();
-		setGetSystemLanguage(&tlc);
-		setMakeLanguage(tlc, &lc);
-		switch (lc) {
+		setGetSystemLanguage(&languageCode);
+		setMakeLanguage(languageCode, &language);
+		switch (language) {
 		case SetLanguage_FR:
 			_fileLanguage = _fileVoice = kFileLanguage_FR;
 			break;
