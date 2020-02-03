@@ -65,6 +65,7 @@ target_link_libraries(${VITA_APPNAME}
   SDL2
   vita2d
   vitaGL
+  mathneon
   WildMidi
   z
   SceAppUtil_stub
