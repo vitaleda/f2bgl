@@ -290,11 +290,22 @@ void Game::updateGameInput() {
 		updateMouseInput();
 	}
 	bool ctrlKey = inp.ctrlKey;
-	if ((_cheats & kCheatUseButtonToShoot) != 0) {
+	if ((_cheats & kCheatActivateButtonToShoot) != 0) {
 		if (isConradInShootingPos()) {
 			if (inp.spaceKey) {
 				inp.ctrlKey = true;
 				inp.spaceKey = false;
+			}
+		}
+	}
+	if ((_cheats & kCheatShootButtonToStep) != 0) {
+		if (!isConradInShootingPos()) {
+			if (inp.ctrlKey && (inp.dirMask & (kInputDirLeft | kInputDirRight)) == 0) {
+				inp.footStepKey = (inp.dirMask & kInputDirUp) != 0;
+				inp.dirMask &= ~kInputDirUp;
+				inp.backStepKey = (inp.dirMask & kInputDirDown) != 0;
+				inp.dirMask &= ~kInputDirDown;
+				inp.ctrlKey = false;
 			}
 		}
 	}
@@ -307,9 +318,22 @@ void Game::updateGameInput() {
 			}
 		}
 	}
+	bool shiftKey = inp.shiftKey;
+	if ((_cheats & kCheatStepWithUpDownInShooting) != 0) {
+		if (isConradInShootingPos()) {
+			if (inp.shiftKey && (inp.dirMask & (kInputDirLeft | kInputDirRight)) == 0) {
+				inp.footStepKey = (inp.dirMask & kInputDirUp) != 0;
+				inp.dirMask &= ~kInputDirUp;
+				inp.backStepKey = (inp.dirMask & kInputDirDown) != 0;
+				inp.dirMask &= ~kInputDirDown;
+				inp.shiftKey = false;
+			}
+		}
+	}
 	updateInput();
 	inp.ctrlKey = ctrlKey;
 	inp.enterKey = enterKey;
+	inp.shiftKey = shiftKey;
 }
 
 bool Game::testInputKeyMask(int num, int dir, int button, int index) const {

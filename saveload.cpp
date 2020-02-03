@@ -5,33 +5,39 @@
 
 static const char *kFn_s = "f2bgl-level%s-%02d.%s";
 static const char *kMenuFn_s = "f2bgl-freesav%d.%s";
+static const char *kScreenshotFn_s = "f2bgl-screenshot-%03d.%s";
 
 static const char *kSaveText = "1.00 Aug 25 1995  09:11:45 (c) 1995 Delphine Software, France";
 static const int kHeaderSize = 96;
 
 // 21 - first version
-// 22 - persists GameObject.text
+// 22 - persist GameObject.text
 // 23 - remove Game._sceneCameraPosTable (read-only data)
 // 24 - lookup _musicKey index
 // 25 - add level.obj crc32
-static const int kSaveVersion = 25;
+// 26 - add language datafiles (messages offset differ on the language)
+// 27 - add voice datafiles (messages offset differ on the voice for SP and IT) and remove ResMessageDescription
+// 28 - persist GameFollowingObject
+// 29 - persist ResMessageDescription.duration
+static const int kSaveVersion = 29;
 
 static const char *kLevels[] = { "1", "2a", "2b", "2c", "3", "4a", "4b", "4c", "5a", "5b", "5c", "6a", "6b" };
 
-static const char *kLevelNames[] = {
-	"The Prison",
-	"Morph Base",
-	"Mars Mining Facility",
-	"Venus Space Station",
-	"The Pyramid",
-	"Landing Pad",
-	"Underground",
-	"Morph Mothership",
-	"Earth Base : Command Room",
-	"Earth Base : Dormitory",
-	"Reactor Room",
-	"The Master Brain",
-};
+static const char *languageString(int language) {
+	switch (language) {
+	case kFileLanguage_EN:
+		return "EN";
+	case kFileLanguage_FR:
+		return "FR";
+	case kFileLanguage_GR:
+		return "GR";
+	case kFileLanguage_SP:
+		return "SP";
+	case kFileLanguage_IT:
+		return "IT";
+	}
+	return "";
+}
 
 enum {
 	kModeSave,
@@ -139,7 +145,7 @@ static void persistSceneAnimation(File *fp, SceneAnimation &s) {
 	persist<M>(fp, s.frameIndex);
 	persist<M>(fp, s.frame2Index);
 	persist<M>(fp, s.flags);
-};
+}
 
 template <int M>
 static void persistSceneAnimationState(File *fp, SceneAnimationState &s) {
@@ -308,7 +314,7 @@ static void persistGameObject(File *fp, Game &g, GameObject *o) {
 }
 
 template <int M>
-static void persisGameFollowingObject(File *fp, GameFollowingObject &o) {
+static void persistGameFollowingObject(File *fp, GameFollowingObject &o) {
 	for (int i = 0; i < ARRAYSIZE(o.points); ++i) {
 		persist<M>(fp, o.points[i].x);
 		persist<M>(fp, o.points[i].z);
@@ -350,6 +356,11 @@ static void persistObjects(File *fp, Game &g) {
 		free(g._followingObjectsTable);
 		g._followingObjectsTable = ALLOC<GameFollowingObject>(g._followingObjectsCount);
 	}
+	if (_saveVersion >= 28) {
+		for (int i = 0; i < g._followingObjectsCount; ++i) {
+			persistGameFollowingObject<M>(fp, g._followingObjectsTable[i]);
+		}
+	}
 	for (int i = 0; i < ARRAYSIZE(g._objectsPtrTable); ++i) {
 		persistGameObjectPtrByKey<M>(fp, g, g._objectsPtrTable[i]);
 	}
@@ -365,7 +376,7 @@ static void persistObjects(File *fp, Game &g) {
 	for (int i = 0; i < g._collidingObjectsCount; ++i) {
 		persistGameObjectPtrByKey<M>(fp, g, g._collidingObjectsTable[i]);
 	}
-	persist<M>(fp, g._currentObjectKey);
+	pad<M>(fp, sizeof(int16_t));
 	persist<M>(fp, g._newPlayerObject);
 }
 
@@ -454,24 +465,16 @@ static void persistOption(File *fp, Game &g) {
 	persist<M>(fp, g._ticks);
 	pad<M>(fp, sizeof(uint32_t));
 	persist<M>(fp, g._rnd._randSeed);
-	for (int i = 0; i < ARRAYSIZE(g._cut._playedTable); ++i) {
-		persist<M>(fp, g._cut._playedTable[i]);
+	for (int i = 0; i < ARRAYSIZE(g._cut->_playedTable); ++i) {
+		persist<M>(fp, g._cut->_playedTable[i]);
 	}
 }
 
 template <int M>
-static void persistResMessageDescription(File *fp, Game &g, ResMessageDescription &d) {
-	persistPtr<M>(fp, d.data, g._res._objectTextData);
-	persist<M>(fp, d.frameSync);
-	persist<M>(fp, d.duration);
-	persist<M>(fp, d.xPos);
-	persist<M>(fp, d.yPos);
-	persist<M>(fp, d.font);
-}
-
-template <int M>
 static void persistGamePlayerMessage(File *fp, Game &g, GamePlayerMessage &m) {
-	persistResMessageDescription<M>(fp, g, m.desc);
+	if (_saveVersion <= 26 && M == kModeLoad) {
+		pad<kModeLoad>(fp, 16); // sizeof(ResMessageDescription)
+	}
 	persist<M>(fp, m.objKey);
 	persist<M>(fp, m.value);
 	persist<M>(fp, m.w);
@@ -480,11 +483,23 @@ static void persistGamePlayerMessage(File *fp, Game &g, GamePlayerMessage &m) {
 	persist<M>(fp, m.yPos);
 	persist<M>(fp, m.visible);
 	persist<M>(fp, m.crc);
+	g.getMessage(m.objKey, m.value, &m.desc);
+	if (_saveVersion >= 29) {
+		persist<M>(fp, m.desc.duration);
+	}
 }
 
 template <int M>
 static void persistMessage(File *fp, Game &g) {
 	persist<M>(fp, g._playerMessagesCount);
+	if (M == kModeLoad) {
+		if (g._playerMessagesCount < 0) {
+			warning("Invalid value for _playerMessagesCount %d", g._playerMessagesCount);
+			g._playerMessagesCount = 0;
+		}
+		// clear all messages from previous gameplay (for op_addObjectMessage)
+		memset(g._playerMessagesTable, 0, sizeof(g._playerMessagesTable));
+	}
 	for (int i = 0; i < g._playerMessagesCount; ++i) {
 		persistGamePlayerMessage<M>(fp, g, g._playerMessagesTable[i]);
 	}
@@ -527,10 +542,12 @@ bool Game::saveGameState(int num) {
 	if (!fp) {
 		return false;
 	}
-	char header[kHeaderSize - sizeof(uint32_t)];
+	char header[kHeaderSize - sizeof(uint32_t) - sizeof(uint16_t) - sizeof(uint16_t)];
 	memset(header, 0, sizeof(header));
 	snprintf(header, sizeof(header), "PC__%4d : %s", kSaveVersion, kSaveText);
 	fileWrite(fp, header, sizeof(header));
+	fileWriteUint16LE(fp, fileLanguage());
+	fileWriteUint16LE(fp, fileVoice());
 	fileWriteUint32LE(fp, g_level1ObjCrc);
 	_saveVersion = kSaveVersion;
 	// 160x100 thumbnail
@@ -553,52 +570,75 @@ bool Game::loadGameState(int num) {
 	}
 	char header[kHeaderSize];
 	fileRead(fp, header, sizeof(header));
-	if (sscanf(header, "PC__%4d", &_saveVersion) == 1 && _saveVersion >= 21) {
-		if (_saveVersion >= 25) {
-			const uint32_t level1ObjCrc = READ_LE_UINT32(header + kHeaderSize - 4);
-			if (level1ObjCrc != g_level1ObjCrc) {
-				warning("Invalid datafiles CRC 0x%08x (0x%08x) for savegame #%d", level1ObjCrc, g_level1ObjCrc, num);
-				fileClose(fp);
-				return false;
-			}
-		}
-		int level = -1;
-		persist<kModeLoad>(fp, level);
-		debug(kDebug_SAVELOAD, "level %d currentLevel %d", level, _level);
-		if (level != _level) {
-			_level = level;
-			initLevel();
-		}
-		persistGameState<kModeLoad>(fp, *this);
-		_updatePalette = true;
-		playMusic(_snd._musicMode);
-	} else {
+	_saveVersion = 0;
+	if (sscanf(header, "PC__%4d", &_saveVersion) != 1 || _saveVersion < 21) {
 		warning("Unexpected savegame #%d version %d", num, _saveVersion);
+		fileClose(fp);
+		return false;
 	}
+	if (_saveVersion >= 25) {
+		const uint32_t level1ObjCrc = READ_LE_UINT32(header + kHeaderSize - 4);
+		if (level1ObjCrc != g_level1ObjCrc) {
+			warning("Incompatible datafiles CRC 0x%08x (0x%08x) for savegame #%d", level1ObjCrc, g_level1ObjCrc, num);
+			fileClose(fp);
+			return false;
+		}
+	}
+	if (_saveVersion >= 26) {
+		const int saveLanguage = READ_LE_UINT16(header + kHeaderSize - 8);
+		const int currentLanguage = fileLanguage();
+		if (saveLanguage != currentLanguage) {
+			warning("Incompatible datafiles language %s (%s) for savegame #%d", languageString(saveLanguage), languageString(currentLanguage), num);
+			fileClose(fp);
+			return false;
+		}
+	}
+	if (_saveVersion >= 27) {
+		const int saveVoice = READ_LE_UINT16(header + kHeaderSize - 6);
+		const int currentVoice = fileVoice();
+		if (saveVoice != currentVoice) {
+			warning("Incompatible datafiles voice %s (%s) for savegame #%d", languageString(saveVoice), languageString(currentVoice), num);
+			fileClose(fp);
+			return false;
+		}
+	}
+	int level = -1;
+	persist<kModeLoad>(fp, level);
+	debug(kDebug_SAVELOAD, "level %d currentLevel %d", level, _level);
+	if (level != _level) {
+		_level = level;
+		initLevel();
+	}
+	persistGameState<kModeLoad>(fp, *this);
+	_updatePalette = true;
+	const int16_t musicKey = _snd._musicKey;
+	_snd._musicKey = -1;
+	playMusic(_snd._musicMode);
+	debug(kDebug_SAVELOAD, "musicKey %d %d", musicKey, _snd._musicKey);
 	fileClose(fp);
 	return true;
 }
 
-void Game::saveScreenshot(int num) {
+void Game::saveScreenshot(bool saveState, int num) {
 	int w, h;
 	const uint8_t *p = _render->captureScreen(&w, &h);
 	if (p) {
 		char filename[32];
-		snprintf(filename, sizeof(filename), kFn_s, kLevels[_level], num, "tga");
+		if (saveState) {
+			snprintf(filename, sizeof(filename), kFn_s, kLevels[_level], num, "tga");
+		} else {
+			snprintf(filename, sizeof(filename), kScreenshotFn_s, num, "tga");
+		}
 		saveTGA(filename, p, w, h, false);
 	}
 }
 
-const char *Game::getLevelName(int level) const {
-	if (level >= 0 && level < ARRAYSIZE(kLevelNames)) {
-		return kLevelNames[level];
-	}
-	return 0;
-}
-
 bool Game::hasSavedGameState(int num) const {
-	assert(num < 0);
 	char filename[32];
-	snprintf(filename, sizeof(filename), kMenuFn_s, -num, "sav");
+	if (num < 0) {
+		snprintf(filename, sizeof(filename), kMenuFn_s, -num, "sav");
+	} else {
+		snprintf(filename, sizeof(filename), kFn_s, kLevels[_level], num, "sav");
+	}
 	return fileExists(filename, kFileType_LOAD);
 }

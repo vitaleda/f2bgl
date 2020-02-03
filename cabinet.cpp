@@ -33,6 +33,7 @@ void Game::doCabinet() {
 		SceneObject *so = &_sceneObjectsTable[0];
 		if (so->verticesCount != 0) {
 			_render->setupProjection(kProjMenu);
+			_render->setIgnoreDepth(false);
 			_render->beginObjectDraw(so->x, so->y, so->z, so->pitch);
 			drawSceneObjectMesh(so);
 			_render->endObjectDraw();
@@ -137,11 +138,11 @@ void Game::doCabinet() {
 						}
 					} else {
 						setObjectParent(tmpObj, getObjectByKey(tmpObj->customData[3]));
-						_objectsPtrTable[11] = _objectsPtrTable[kObjPtrInventaire]->o_child->o_child;
-						if (_objectsPtrTable[11]) {
-							_varsTable[15] = _objectsPtrTable[11]->objKey;
-							if (getMessage(_objectsPtrTable[11]->objKey, 0, &_tmpMsg) && _tmpMsg.data) {
-								_objectsPtrTable[11]->text = (const char *)_tmpMsg.data;
+						_objectsPtrTable[kObjPtrGun] = _objectsPtrTable[kObjPtrInventaire]->o_child->o_child;
+						if (_objectsPtrTable[kObjPtrGun]) {
+							_varsTable[15] = _objectsPtrTable[kObjPtrGun]->objKey;
+							if (getMessage(_objectsPtrTable[kObjPtrGun]->objKey, 0, &_tmpMsg) && _tmpMsg.data) {
+								_objectsPtrTable[kObjPtrGun]->text = (const char *)_tmpMsg.data;
 							}
 						}
 					}

@@ -189,6 +189,7 @@ struct FileSystem {
 };
 
 bool g_isDemo = false;
+bool g_hasPsx = false;
 uint32_t g_level1ObjCrc;
 static int _fileLanguage;
 static int _fileVoice;
@@ -196,6 +197,7 @@ const char *g_fileDataPath;
 const char *g_fileSavePath;
 static bool _exitOnError = true;
 static FileSystem *_fileSystem;
+static const char *_psxDataPath;
 
 static void fileMakeFilePath(const char *fileName, int fileType, int fileLang, char *filePath) {
 	static const char *dataDirsTable[] = { "DATA", "DATA/SOUND", "TEXT", "VOICE", "DATA/DRIVERS", "INSTDATA" };
@@ -255,6 +257,13 @@ bool fileExists(const char *fileName, int fileType) {
 		struct stat st;
 		return stat(filePath, &st) == 0 && S_ISREG(st.st_mode);
 	}
+	if (g_isDemo) {
+		if (fileType == kFileType_VOICE) {
+			return false;
+		} else if (fileType == kFileType_TEXT) {
+			fileType = kFileType_DATA;
+		}
+	}
 	bool exists = false;
 	File *fp = fileOpenIntern(fileName, fileType);
 	if (fp) {
@@ -287,6 +296,10 @@ bool fileInit(int language, int voice, const char *dataPath, const char *savePat
 
 int fileLanguage() {
 	return _fileLanguage;
+}
+
+int fileVoice() {
+	return _fileVoice;
 }
 
 File *fileOpen(const char *fileName, int *fileSize, int fileType, bool errorIfNotFound) {
@@ -354,13 +367,14 @@ void fileClose(File *fp) {
 	}
 }
 
-void fileRead(File *fp, void *buf, int size) {
-	int count = fp->read(buf, size);
+int fileRead(File *fp, void *buf, int size) {
+	const int count = fp->read(buf, size);
 	if (count != size) {
 		if (_exitOnError && fp->err()) {
 			error("I/O error on reading %d bytes", size);
 		}
 	}
+	return count;
 }
 
 uint8_t fileReadByte(File *fp) {
@@ -451,4 +465,74 @@ void fileWriteLine(File *fp, const char *s, ...) {
 	vsprintf(buf, s, va);
 	va_end(va);
 	fileWrite(fp, buf, strlen(buf));
+}
+
+int fileSize(File *fp) {
+	const int pos = fp->seek(0, SEEK_END);
+	const int size = fp->tell();
+	fp->seek(pos, SEEK_SET);
+	return size;
+}
+
+bool fileInitPsx(const char *dataPath) {
+	_psxDataPath = dataPath;
+	g_hasPsx = true;
+	return g_hasPsx;
+}
+
+static const char *_psxLanguages[] = { "us", "fr", "gr", "sp", "it", "jp" };
+
+File *fileOpenPsx(const char *filename, int fileType, int levelNum) {
+	File *fp = new StdioFile;
+	char path[MAXPATHLEN];
+	switch (fileType) {
+	case kFileType_PSX_IMG:
+		snprintf(path, sizeof(path), "%s/img/%s", _psxDataPath, filename);
+		break;
+	case kFileType_PSX_LEVELDATA:
+		snprintf(path, sizeof(path), "%s/data%d/%s", _psxDataPath, levelNum, filename);
+		if (fp->open(path, "rb")) {
+			return fp;
+		}
+		break;
+	case kFileType_PSX_VIDEO:
+		if (strlen(filename) != 8) {
+			warning("Invalid PSX video filename '%s'", filename);
+			break;
+		}
+		// voiced videos
+		snprintf(path, sizeof(path), "%s/videos/%s/%s", _psxDataPath, _psxLanguages[_fileLanguage], filename);
+		if (fp->open(path, "rb")) {
+			return fp;
+		}
+		if (_fileLanguage == kFileLanguage_GR) {
+			// german specific videos
+			snprintf(path, sizeof(path), "%s/video2/gr%s", _psxDataPath, &filename[2]);
+			if (fp->open(path, "rb")) {
+				return fp;
+			}
+		}
+		snprintf(path, sizeof(path), "%s/video2/%s", _psxDataPath, filename);
+		if (fp->open(path, "rb")) {
+			return fp;
+		}
+		snprintf(path, sizeof(path), "%s/video/%s", _psxDataPath, filename);
+		if (fp->open(path, "rb")) {
+			return fp;
+		}
+		break;
+	case kFileType_PSX_VOICE:
+		snprintf(path, sizeof(path), "%s/xa_%s/%s", _psxDataPath, _psxLanguages[_fileLanguage], filename);
+		break;
+	default:
+		break;
+	}
+	// fallback, files dumped without directory structure
+	snprintf(path, sizeof(path), "%s/%s", _psxDataPath, filename);
+	if (fp->open(path, "rb")) {
+		return fp;
+	}
+	warning("Unable to open '%s' type %d", filename, fileType);
+	delete fp;
+	return 0;
 }

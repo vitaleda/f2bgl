@@ -72,11 +72,6 @@ void Cutscene::updatePalette(int palType, int colorsCount, const uint8_t *p) {
 			}
 		}
 	}
-#ifdef __SWITCH__
-	_render->setPalette(_palette, 0, 256, false);
-#else
-	_render->setPalette(_palette, 0, 256);
-#endif
 }
 
 static int decodeHuffman(const uint8_t *src, int srcSize, uint8_t *dst) {
@@ -109,7 +104,7 @@ static void decodeRLE(const uint8_t *src, int srcSize, uint8_t *dst) {
 	const uint8_t *srcEnd = src + srcSize;
 	while (src < srcEnd) {
 		int len;
-		uint8_t code = *src++;
+		const int code = *src++;
 		if (code & 0x80) {
 			len = code - 0x7F;
 			memset(dst, *src++, len);
@@ -124,8 +119,8 @@ static void decodeRLE(const uint8_t *src, int srcSize, uint8_t *dst) {
 }
 
 static void decodeADD(const uint8_t *src, int srcSize, uint8_t *dst) {
-	while (srcSize--) {
-		*dst++ += *src++;
+	for (int i = 0; i < srcSize; ++i) {
+		dst[i] += src[i];
 	}
 }
 
@@ -170,8 +165,7 @@ void Cutscene::decodeImage(const uint8_t *frameData) {
 static int _drawSubCharRectHeight;
 
 static void drawSubChar(DrawBuffer *buf, int x, int y, int w, int h, const uint8_t *src) {
-	y = _drawSubCharRectHeight - 12 - y;
-	uint8_t *dst = buf->ptr + y * buf->pitch + x;
+	uint8_t *dst = buf->ptr + (_drawSubCharRectHeight - y) * buf->pitch + x;
 	src += h * w;
 	while (h--) {
 		src -= w;
@@ -182,6 +176,15 @@ static void drawSubChar(DrawBuffer *buf, int x, int y, int w, int h, const uint8
 		}
 		dst += buf->pitch;
 	}
+}
+
+static int countMessageLines(const char *data) {
+	const char *sep = strchr(data, '@');
+	int linesCount = 1;
+	for (const char *p = data; *p && (p = strchr(p, '|')) != 0 && (!sep || p < sep); ++p) {
+		++linesCount;
+	}
+	return linesCount;
 }
 
 void Cutscene::updateMessages() {
@@ -196,11 +199,13 @@ void Cutscene::updateMessages() {
 				const char *p = (const char *)msg->desc.data;
 				assert(p);
 				_msgs[0].data = p;
+				_msgs[0].linesCount = countMessageLines(p);
 				_msgsCount = 1;
 				while (*p && (p = strchr(p, '@')) != 0) {
 					++p;
 					assert(_msgsCount < kSubtitleMessagesCount);
 					_msgs[_msgsCount].data = p;
+					_msgs[_msgsCount].linesCount = countMessageLines(p);
 					++_msgsCount;
 				}
 				for (int i = 0; i < _msgsCount; ++i) {
@@ -215,17 +220,24 @@ void Cutscene::updateMessages() {
 	}
 	for (int i = 0; i < _msgsCount; ++i) {
 		if (_msgs[i].duration != 0) {
+			_game->_drawCharBuf.ptr = _frameBuffers[0];
+			_game->_drawCharBuf.w = _game->_drawCharBuf.pitch = _fileHdr.videoFrameWidth;
+			_game->_drawCharBuf.h = _fileHdr.videoFrameHeight;
+			_game->_drawCharBuf.draw = drawSubChar;
+			_drawSubCharRectHeight = _msgs[i].linesCount * _game->_fontsTable[kFontNameCineTypo].h - 12;
 			const char *str = _msgs[i].data;
-			int w, h;
-			_game->getStringRect(str, kFontNameCineTypo, &w, &h);
-			if (w < _fileHdr.videoFrameWidth && h < _fileHdr.videoFrameHeight) {
-				_game->_drawCharBuf.ptr = _frameBuffers[0];
-				_game->_drawCharBuf.w = _game->_drawCharBuf.pitch = _fileHdr.videoFrameWidth;
-				_game->_drawCharBuf.h = _fileHdr.videoFrameHeight;
-				_drawSubCharRectHeight = h;
-				_game->_drawCharBuf.draw = drawSubChar;
+			int y = 0;
+			while (1) {
+				int w, h;
+				const int offset = _game->getStringRect(str, kFontNameCineTypo, &w, &h);
+				assert(w < _fileHdr.videoFrameWidth && h < _fileHdr.videoFrameHeight);
 				const int x = (_fileHdr.videoFrameWidth - w) / 2;
-				_game->drawString(x, 0, _msgs[i].data, kFontNameCineTypo, 0);
+				_game->drawString(x, y, str, kFontNameCineTypo, 0);
+				if (str[offset] == 0 || str[offset] == '@') {
+					break;
+				}
+				y += h;
+				str += offset + 1; // skip new line character
 			}
 			--_msgs[i].duration;
 			if (_msgs[i].duration == 0 && i == _msgsCount - 1) {
@@ -392,7 +404,7 @@ bool Cutscene::load(int num) {
 		return false;
 	}
 	if (!g_isDemo && _fileHdr.soundFrameSize != 0 && (_fileHdr.soundStereo != 0 || _fileHdr.soundBits != 16 || _fileHdr.soundFreq != 22050)) {
-		warning("Cutscene::load() Unsupported sound format %d/%d/%d", _fileHdr.soundStereo, _fileHdr.soundBits, _fileHdr.soundFreq);
+		warning("Cutscene::load() Unsupported sound format, stereo %d bits %d freq %d", _fileHdr.soundStereo, _fileHdr.soundBits, _fileHdr.soundFreq);
 		fileClose(_fp); _fp = 0;
 		return false;
 	}
@@ -401,7 +413,7 @@ bool Cutscene::load(int num) {
 	}
 	_frameReadBuffer = (uint8_t *)malloc(_fileHdr.videoFrameSize + 1024);
 	_soundReadBuffer = 0;
-	_snd->_mix.playQueue(4);
+	_snd->_mix.playQueue(4, kMixerQueueType_D16);
 	_frameCounter = 0;
 	_msgsCount = 0;
 	memset(&_msgs, 0, sizeof(_msgs));
@@ -411,7 +423,7 @@ bool Cutscene::load(int num) {
 
 bool Cutscene::play() {
 	if (_frameCounter == 0) {
-		_render->resizeOverlay(_fileHdr.videoFrameWidth, kCutsceneDisplayHeight);
+		_render->resizeOverlay(_fileHdr.videoFrameWidth, _fileHdr.videoFrameHeight, false, kCutsceneDisplayWidth, kCutsceneDisplayHeight);
 	}
 	++_frameCounter;
 	if (g_isDemo && _frameCounter == _duration) {
@@ -441,19 +453,14 @@ bool Cutscene::play() {
 		updateMessages();
 	}
 	drawFrame();
-	const PlayerInput &inp = _game->inp;
-	// skip all cutscenes
-	_interrupted = inp.spaceKey || inp.enterKey;
-	// skip current cutscene
-	const bool stop = inp.escapeKey || (!inp.pointers[0][0].down && inp.pointers[0][1].down);
-	return !_interrupted && !stop;
+	return true;
 }
 
 void Cutscene::drawFrame() {
 	_render->clearScreen();
 	if (_frameCounter != 0) {
 		const int y = (kCutsceneDisplayHeight - _fileHdr.videoFrameHeight) / 2;
-		_render->copyToOverlay(0, y, _frameBuffers[0], _fileHdr.videoFrameWidth, _fileHdr.videoFrameWidth, _fileHdr.videoFrameHeight);
+		_render->copyToOverlay(0, y, _fileHdr.videoFrameWidth, _fileHdr.videoFrameHeight, _frameBuffers[0], false, _palette);
 	}
 }
 
@@ -517,4 +524,46 @@ int Cutscene::dequeue() {
 		return num;
 	}
 	return -1;
+}
+
+int Cutscene::changeToNext() {
+	const int cutsceneNum = _numToPlay;
+	if (!isInterrupted()) {
+		do {
+			int num = dequeue();
+			if (num < 0) {
+				switch (_numToPlay) {
+				case 47: // logo ea
+					num = 39;
+					break;
+				case 39: // logo dsi
+					num = 13;
+					break;
+				case 13: // 'intro'
+					num = 37;
+					break;
+				case 37: // opening credits - 'title'
+					num = 53;
+					break;
+				case 53: // 'gendeb'
+					num = 29;
+					break;
+				// game completed
+				case 48: // closing credits - 'mgm'
+					num = 44;
+					break;
+				case 44: // fade to black - 'fade1'
+					num = 13;
+					break;
+				default:
+					num = -1;
+					break;
+				}
+			}
+			_numToPlay = num;
+		} while (_numToPlay >= 0 && !load(_numToPlay));
+	} else {
+		_numToPlay = -1;
+	}
+	return cutsceneNum;
 }

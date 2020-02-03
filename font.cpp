@@ -47,26 +47,6 @@ void Game::initFonts() {
 void Game::drawChar(int x, int y, SpriteImage *spr, int color) {
 	if (_drawCharBuf.draw) {
 		_drawCharBuf.draw(&_drawCharBuf, x, y, spr->w, spr->h, spr->data);
-	} else if (_drawCharBuf.ptr) {
-		const uint8_t *src = spr->data;
-		int h = spr->h;
-		int w = spr->w;
-		uint8_t *dst = _drawCharBuf.ptr + y * _drawCharBuf.pitch + x;
-		if (color == 0) {
-			while (h--) {
-				memcpy(dst, src, w);
-				dst += _drawCharBuf.pitch;
-				src += w;
-			}
-		} else {
-			while (h--) {
-				for (int i = 0; i < w; ++i) {
-					dst[i] = (src[i] == 0x74) ? color : src[i];
-				}
-				dst += _drawCharBuf.pitch;
-				src += w;
-			}
-		}
 	} else {
 		_render->drawSprite(x, y, spr->data, spr->w, spr->h, 0, spr->key);
 	}
@@ -81,17 +61,15 @@ void Game::drawString(int x, int y, const char *str, int font, int color) {
 	int chrY = y;
 	int chr;
 	while ((chr = (unsigned char)*str++) != 0) {
-		if (chr == '@') {
-			if (font == kFontNameCineTypo) {
-				break;
-			}
-			chr = '|';
-		}
 		switch (chr) {
 		case '\t':
 			chrX += 8 * ft->w;
 			break;
+		case '@':
 		case '|':
+			if (font == kFontNameCineTypo) {
+				return;
+			}
 			chrY += ft->h;
 			chrX = x;
 			break;
@@ -109,7 +87,7 @@ void Game::drawString(int x, int y, const char *str, int font, int color) {
 	}
 }
 
-void Game::getStringRect(const char *str, int font, int *w, int *h) {
+int Game::getStringRect(const char *str, int font, int *w, int *h) {
 	font &= 31;
 	assert(font < kFontTableSize);
 	Font *ft = &_fontsTable[font];
@@ -117,18 +95,17 @@ void Game::getStringRect(const char *str, int font, int *w, int *h) {
 	int chrWidth = 0;
 	int chrMaxWidth = 0;
 	int chr;
-	while ((chr = (uint8_t)*str++) != 0) {
-		if (chr == '@') {
-			if (font == kFontNameCineTypo) {
-				break;
-			}
-			chr = '|';
-		}
+	int offset = 0;
+	for (; (chr = (uint8_t)str[offset]) != 0; ++offset) {
 		switch (chr) {
 		case '\t':
 			chrWidth += 8 * ft->w;
 			break;
+		case '@':
 		case '|':
+			if (font == kFontNameCineTypo) {
+				goto end;
+			}
 			if (chrWidth > chrMaxWidth) {
 				chrMaxWidth = chrWidth;
 			}
@@ -145,9 +122,11 @@ void Game::getStringRect(const char *str, int font, int *w, int *h) {
 			break;
 		}
 	}
+end:
 	chrHeight += ft->h;
 	*w = MAX(chrMaxWidth, chrWidth);
 	*h = chrHeight;
+	return offset;
 }
 
 static int getScaledCoord(int x, int f, int w) {

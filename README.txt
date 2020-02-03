@@ -1,6 +1,6 @@
 
 f2bgl README
-Release version: 0.2.3
+Release version: 0.3.1
 -------------------------------------------------------------------------------
 
 
@@ -41,28 +41,39 @@ Defaults can be changed using command line switches :
     --fullscreen                Fullscreen display (stretched)
     --fullscreen-ar             Fullscreen display (4:3 aspect ratio)
     --soundfont=FILE            SoundFont (.sf2) file for music
-    --fog                       Enable fog rendering
     --texturefilter=FILTER      Texture filter (default 'linear')
     --texturescaler=NAME        Texture scaler (default 'scale2x')
     --mouse                     Enable mouse controls
+    --no-fog                    Disable fog rendering
+    --no-gouraud                Disable gouraud shading
 
-In-game hotkeys :
+
+Controls:
+---------
+
+The game can be played using a joystick, a gamepad or the keyboard.
+Key mappings can be changed by editing the file 'controls.cfg'.
+
+In-game keys (default) :
 
     Arrow Keys     move Conrad
     Alt / V        toggle gun mode
-    Shift          walk
+    Shift          walk (or steps)
     Ctrl / B       shoot
     Enter          reload gun
-    Space          activate
-    Tab            skip cutscene
+    Space          activate (or shoot)
+    Tab            change inventory category
     Escape         save/load menu
     I              inventory menu
     J              jump
-    U              use
+    U              use current item
     1 .. 5         use item #
+    T              take screenshot
     S              save game state
     L              load game state
-    + and -        change game state slot
+    + and -        change game state save slot
+    F1             toggle fog on/off
+    F2             toggle flat/gouraud shading
 
 
 Credits:

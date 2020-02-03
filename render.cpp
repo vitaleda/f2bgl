@@ -11,11 +11,19 @@
 #include <SDL_opengl.h>
 #endif
 #include <math.h>
+#include <sys/time.h>
 #include "render.h"
 #include "texturecache.h"
 
 static const int kOverlayWidth = 320;
 static const int kOverlayHeight = 200;
+
+static const GLfloat _fogColor[4] = { .1, .1, .1, 1. };
+
+static const GLfloat _lightPosition[4] = { 0., .3, 0., 0. };
+static const GLfloat _lightAmbient[4]  = { .4, .4, .4, 1. };
+static const GLfloat _lightDiffuse[4]  = { 1., 1., 1., 1. };
+static const GLfloat _lightSpecular[4] = { 1., 1., 1., 1. };
 
 struct Vertex3f {
 	GLfloat x, y, z;
@@ -121,19 +129,20 @@ static void emitTriFan3i(const Vertex *vertices, int count) {
 #else
 	glBegin(GL_TRIANGLE_FAN);
 		for (int i = 0; i < count; ++i) {
+			glNormal3i(vertices[i].nx, vertices[i].ny, vertices[i].nz);
 			glVertex3i(vertices[i].x, vertices[i].y, vertices[i].z);
 		}
         glEnd();
 #endif
 }
 
-static void emitPoint3f(const Vertex *pos) {
+static void emitPoint3i(const Vertex *pos) {
 #ifdef USE_GLES
 	glVertexPointer(3, GL_FLOAT, 0, bufferVertex(pos, 1));
 	glDrawArrays(GL_POINTS, 0, 1);
 #else
 	glBegin(GL_POINTS);
-		glVertex3f(pos->x, pos->y, pos->z);
+		glVertex3i(pos->x, pos->y, pos->z);
 	glEnd();
 #endif
 }
@@ -141,38 +150,32 @@ static void emitPoint3f(const Vertex *pos) {
 static TextureCache _textureCache;
 static Vertex3f _cameraPos;
 static GLfloat _cameraPitch;
+struct timeval _frameTimeStamp;
 
 Render::Render(const RenderParams *params) {
 	memset(_clut, 0, sizeof(_clut));
 	_aspectRatio = 1.;
 	_screenshotBuf = 0;
-	_overlay.buf = (uint8_t *)calloc(kOverlayWidth * kOverlayHeight, sizeof(uint8_t));
-	_overlay.tex = 0;
+	memset(&_overlay, 0, sizeof(_overlay));
 	_overlay.r = _overlay.g = _overlay.b = 255;
 	_viewport.changed = true;
-	_viewport.pw = 256;
-	_viewport.ph = 256;
+	_viewport.wScale = 256;
+	_viewport.hScale = 256;
 	_textureCache.init(params->textureFilter, params->textureScaler);
 	_paletteGreyScale = false;
 	_paletteRgbScale = 256;
 	_fog = params->fog;
+	_lighting = params->gouraud;
 	_drawObjectIgnoreDepth = false;
-}
+	gettimeofday(&_frameTimeStamp, 0);
+	_framesCount = 0;
+	_framesPerSec = 0;
 
-Render::~Render() {
-	free(_screenshotBuf);
-	free(_overlay.buf);
-}
-
-void Render::flushCachedTextures() {
-	_textureCache.flush();
-	_overlay.tex = 0;
-}
-
-static const GLfloat _fogColor[4] = { .1, .1, .1, 1. };
-
-void Render::resizeScreen(int w, int h, float *p) {
-	glDisable(GL_LIGHTING);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_NOTEQUAL, 0.);
+	glEnable(GL_NORMALIZE);
 	if (_fog) {
 		glEnable(GL_FOG);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
@@ -181,11 +184,26 @@ void Render::resizeScreen(int w, int h, float *p) {
 		glFogf(GL_FOG_START, 16.);
 		glFogf(GL_FOG_END, 256.);
 	}
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_ALPHA_TEST);
-	glAlphaFunc(GL_NOTEQUAL, 0.);
+	if (_lighting) {
+		glEnable(GL_LIGHT0);
+		glLightfv(GL_LIGHT0, GL_POSITION, _lightPosition);
+		glLightfv(GL_LIGHT0, GL_AMBIENT,  _lightAmbient);
+		glLightfv(GL_LIGHT0, GL_DIFFUSE,  _lightDiffuse);
+		glLightfv(GL_LIGHT0, GL_SPECULAR, _lightSpecular);
+	}
+	glShadeModel(GL_SMOOTH);
+}
+
+Render::~Render() {
+	free(_screenshotBuf);
+}
+
+void Render::flushCachedTextures() {
+	_textureCache.flush();
+	_overlay.tex = 0;
+}
+
+void Render::resizeScreen(int w, int h, float *p) {
 	_w = w;
 	_h = h;
 	_aspectRatio = p[2] / p[3];
@@ -233,42 +251,53 @@ void Render::releaseTexture(int16_t texKey) {
 }
 
 void Render::drawPolygonFlat(const Vertex *vertices, int verticesCount, int color) {
+	bool lightFlatColor = false;
 	switch (color) {
 	case kFlatColorRed:
-		glColor4f(1., 0., 0., .5);
+		glColor4ub(255, 0, 0, 127);
 		break;
 	case kFlatColorGreen:
-		glColor4f(0., 1., 0., .5);
+		glColor4ub(0, 255, 0, 127);
 		break;
 	case kFlatColorYellow:
-		glColor4f(1., 1., 0., .5);
+		glColor4ub(255, 255, 0, 127);
 		break;
 	case kFlatColorBlue:
-		glColor4f(0., 0., 1., .5);
+		glColor4ub(0, 0, 255, 127);
 		break;
 	case kFlatColorShadow:
-		glColor4f(0., 0., 0., .2);
+		glColor4ub(0, 0, 0, 63);
 		break;
 	case kFlatColorLight:
-		glColor4f(1., 1., 1., .2);
+		glColor4ub(255, 255, 255, 63);
 		break;
 	case kFlatColorLight9:
-		glColor4f(1., 1., 1., .5);
+		glColor4ub(255, 255, 255, 127);
 		break;
 	default:
 		if (color >= 0 && color < 256) {
-			glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+			if (_lighting) {
+				glEnable(GL_LIGHTING);
+				glEnable(GL_COLOR_MATERIAL);
+				glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+				lightFlatColor = true;
+			}
+			glColor4ub(_clut[color * 3], _clut[color * 3 + 1], _clut[color * 3 + 2], color == 0 ? 0 : 255);
 		} else {
 			warning("Render::drawPolygonFlat() unhandled color %d", color);
 		}
 		break;
 	}
 	emitTriFan3i(vertices, verticesCount);
-	glColor4f(1., 1., 1., 1.);
+	if (_lighting && lightFlatColor) {
+		glDisable(GL_COLOR_MATERIAL);
+		glDisable(GL_LIGHTING);
+	}
 }
 
 void Render::drawPolygonTexture(const Vertex *vertices, int verticesCount, int primitive, const uint8_t *texData, int texW, int texH, int16_t texKey) {
 	assert(vertices && verticesCount >= 4);
+	glColor4ub(255, 255, 255, 255);
 	glEnable(GL_TEXTURE_2D);
 	Texture *t = _textureCache.getCachedTexture(texKey, texData, texW, texH);
 	glBindTexture(GL_TEXTURE_2D, t->id);
@@ -366,44 +395,40 @@ void Render::drawPolygonTexture(const Vertex *vertices, int verticesCount, int p
 void Render::drawParticle(const Vertex *pos, int color) {
 	switch (color) {
 	case kFlatColorRed:
-		glColor4f(1., 0., 0., .5);
+		glColor4ub(255, 0, 0, 127);
 		break;
 	case kFlatColorGreen:
-		glColor4f(0., 1., 0., .5);
+		glColor4ub(0, 255, 0, 127);
 		break;
 	case kFlatColorYellow:
-		glColor4f(1., 1., 0., .5);
+		glColor4ub(255, 255, 0, 127);
 		break;
 	case kFlatColorBlue:
-		glColor4f(0., 0., 1., .5);
+		glColor4ub(0, 0, 255, 127);
 		break;
 	case kFlatColorShadow:
-		glColor4f(0., 0., 0., .5);
+		glColor4ub(0, 0, 0, 127);
 		break;
 	case kFlatColorLight:
-		glColor4f(1., 1., 1., .2);
+		glColor4ub(255, 255, 255, 63);
 		break;
 	case kFlatColorLight9:
-		glColor4f(1., 1., 1., .5);
+		glColor4ub(255, 255, 255, 127);
 		break;
 	default:
 		if (color >= 0 && color < 256) {
-			glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+			glColor4ub(_clut[color * 3], _clut[color * 3 + 1], _clut[color * 3 + 2], color == 0 ? 0 : 255);
 		} else {
 			warning("Render::drawParticle() unhandled color %d", color);
 		}
 	}
 	glPointSize(4.);
-	emitPoint3f(pos);
+	emitPoint3i(pos);
 	glPointSize(1.);
-	glColor4f(1., 1., 1., 1.);
 }
 
-void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH, int primitive, int16_t texKey, int transparentScale) {
-	glDisable(GL_DEPTH_TEST);
-	if (transparentScale != 256) {
-		glColor4f(1., 1., 1., transparentScale / 256.);
-	}
+void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH, int primitive, int16_t texKey, uint8_t transparentScale) {
+	glColor4ub(255, 255, 255, transparentScale);
 	glEnable(GL_TEXTURE_2D);
 	Texture *t = _textureCache.getCachedTexture(texKey, texData, texW, texH);
 	glBindTexture(GL_TEXTURE_2D, t->id);
@@ -433,64 +458,48 @@ void Render::drawSprite(int x, int y, const uint8_t *texData, int texW, int texH
 		break;
 	}
 	glDisable(GL_TEXTURE_2D);
-	if (transparentScale != 256) {
-		glColor4f(1., 1., 1., 1.);
-	}
-	glEnable(GL_DEPTH_TEST);
 }
 
 void Render::drawRectangle(int x, int y, int w, int h, int color) {
-	glDisable(GL_DEPTH_TEST);
 	assert(color >= 0 && color < 256);
-	glColor4f(_pixelColorMap[0][color], _pixelColorMap[1][color], _pixelColorMap[2][color], _pixelColorMap[3][color]);
+	glColor4ub(_clut[color * 3], _clut[color * 3 + 1], _clut[color * 3 + 2], color == 0 ? 0 : 255);
 	emitQuad2i(x, y, w, h);
-	glColor4f(1., 1., 1., 1.);
-	glEnable(GL_DEPTH_TEST);
 }
 
-void Render::copyToOverlay(int x, int y, const uint8_t *data, int pitch, int w, int h, int transparentColor) {
-	assert(_overlay.tex);
-	assert(x + w <= _overlay.tex->bitmapW);
-	assert(y + h <= _overlay.tex->bitmapH);
-	const int dstPitch = _overlay.tex->bitmapW;
-	uint8_t *dst = _overlay.buf + y * dstPitch + x;
-	if (transparentColor == -1) {
-		while (h--) {
-			memcpy(dst, data, w);
-			dst += dstPitch;
-			data += pitch;
-		}
+void Render::copyToOverlay(int x, int y, int w, int h, const uint8_t *data, bool rgb, const uint8_t *pal) {
+	_overlay.x = x;
+	_overlay.y = y;
+	_overlay.w = w;
+	_overlay.h = h;
+	if (!_overlay.tex) {
+		_overlay.rgbTex = rgb;
+		_overlay.tex = _textureCache.createTexture(data, w, h, rgb, pal);
 	} else {
-		while (h--) {
-			for (int i = 0; i < w; ++i) {
-				if (data[i] != transparentColor) {
-					dst[i] = data[i];
-				}
-			}
-			dst += dstPitch;
-			data += pitch;
-		}
+		_textureCache.updateTexture(_overlay.tex, data, w, h, rgb, pal);
 	}
 }
 
-void Render::beginObjectDraw(int x, int y, int z, int ry, int shift, bool ignoreDepth) {
+void Render::setIgnoreDepth(bool ignoreDepth) {
+	if (_drawObjectIgnoreDepth != ignoreDepth) {
+		if (ignoreDepth) {
+			glDisable(GL_DEPTH_TEST);
+		} else {
+			glEnable(GL_DEPTH_TEST);
+		}
+		_drawObjectIgnoreDepth = ignoreDepth;
+	}
+}
+
+void Render::beginObjectDraw(int x, int y, int z, int ry, int shift) {
 	glPushMatrix();
 	const GLfloat div = 1 << shift;
 	glTranslatef(x / div, y / div, z / div);
 	glRotatef(ry * 360 / 1024., 0., 1., 0.);
 	glScalef(1 / 8., 1 / 2., 1 / 8.);
-	if (ignoreDepth) {
-		_drawObjectIgnoreDepth = true;
-		glDisable(GL_DEPTH_TEST);
-	}
 }
 
 void Render::endObjectDraw() {
 	glPopMatrix();
-	if (_drawObjectIgnoreDepth) {
-		_drawObjectIgnoreDepth = false;
-		glEnable(GL_DEPTH_TEST);
-	}
 }
 
 void Render::setOverlayBlendColor(int r, int g, int b) {
@@ -499,17 +508,15 @@ void Render::setOverlayBlendColor(int r, int g, int b) {
 	_overlay.b = b;
 }
 
-void Render::resizeOverlay(int w, int h) {
-	if (_overlay.tex) {
-		_textureCache.destroyTexture(_overlay.tex);
-		_overlay.tex = 0;
+void Render::resizeOverlay(int w, int h, bool rgb, int displayWidth, int displayHeight) {
+	if (w != _overlay.w || h != _overlay.h || rgb != _overlay.rgbTex) {
+		if (_overlay.tex) {
+			_textureCache.destroyTexture(_overlay.tex);
+			_overlay.tex = 0;
+		}
 	}
-	if (w == 0 || h == 0) {
-		return;
-	}
-	assert(w * h <= kOverlayWidth * kOverlayHeight);
-	memset(_overlay.buf, 0, kOverlayWidth * kOverlayHeight);
-	_overlay.tex = _textureCache.createTexture(_overlay.buf, w, h);
+	_overlay.displayWidth  = displayWidth  == 0 ? w : displayWidth;
+	_overlay.displayHeight = displayHeight == 0 ? h : displayHeight;
 }
 
 void Render::setPaletteScale(bool greyScale, int rgbScale) {
@@ -517,11 +524,13 @@ void Render::setPaletteScale(bool greyScale, int rgbScale) {
 	_paletteRgbScale = rgbScale;
 }
 
-void Render::setPalette(const uint8_t *pal, int offset, int count, bool updateTextures) {
+void Render::setPalette(const uint8_t *pal, int offset, int count) {
+	int color = 3 * offset;
 	for (int i = 0; i < count; ++i) {
 		int r = pal[0];
 		int g = pal[1];
 		int b = pal[2];
+		pal += 3;
 		if (_paletteGreyScale) {
 			const int grey = (r * 30 + g * 59 + b * 11) / 100;
 			r = g = b = grey;
@@ -531,17 +540,12 @@ void Render::setPalette(const uint8_t *pal, int offset, int count, bool updateTe
 			g = CLIP((g * _paletteRgbScale) >> 8, 0, 255);
 			b = CLIP((b * _paletteRgbScale) >> 8, 0, 255);
 		}
-		const int j = offset + i;
-		_clut[3 * j]     = r;
-		_clut[3 * j + 1] = g;
-		_clut[3 * j + 2] = b;
-		_pixelColorMap[0][j] = r / 255.;
-		_pixelColorMap[1][j] = g / 255.;
-		_pixelColorMap[2][j] = b / 255.;
-		_pixelColorMap[3][j] = (j == 0) ? 0. : 1.;
-		pal += 3;
+		_clut[color + 0] = r;
+		_clut[color + 1] = g;
+		_clut[color + 2] = b;
+		color += 3;
 	}
-	_textureCache.setPalette(_clut, updateTextures);
+	_textureCache.setPalette(_clut);
 }
 
 void Render::clearScreen() {
@@ -553,8 +557,8 @@ void Render::clearScreen() {
 #endif
 	if (_viewport.changed) {
 		_viewport.changed = false;
-		const int vw = _viewport.w * _viewport.pw >> 8;
-		const int vh = _viewport.h * _viewport.ph >> 8;
+		const int vw = _viewport.w * _viewport.wScale >> 8;
+		const int vh = _viewport.h * _viewport.hScale >> 8;
 		const int vx = _viewport.x + (_viewport.w - vw) / 2;
 		const int vy = _viewport.y + (_viewport.h - vh) / 2;
 		glViewport(vx, vy, vw, vh);
@@ -562,79 +566,133 @@ void Render::clearScreen() {
 }
 
 void Render::setupProjection(int mode) {
-	if (mode == kProj2D) {
+	const GLfloat aspect = 1.5 * _aspectRatio;
+
+	switch (mode) {
+	case kProj2D:
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
 		glOrtho(-1. / _aspectRatio, 1. / _aspectRatio, kOverlayHeight, 0, 0, 1);
+
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
 		glTranslatef(-1., 0., 0.);
 		glScalef(2. / kOverlayWidth, 1., 1.);
-		return;
-	}
-	const GLfloat aspect = 1.5 * _aspectRatio;
-	if (mode == kProjMenu) {
+
+		if (_fog) {
+			glDisable(GL_FOG);
+		}
+		break;
+
+	case kProjMenu:
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
 		glFrustum(-.5, .5, -aspect / 2, 0., 1., 512.);
 		glTranslatef(0., 0., -20.);
+
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
+		if (_lighting) {
+			glEnable(GL_LIGHT0);
+		} else {
+			glDisable(GL_LIGHT0);
+		}
 		glScalef(1., -.5, 1.);
 		glTranslatef(0., 14. * _aspectRatio, -72.);
-		return;
-	}
-	if (mode == kProjInstall) {
+
+		if (_fog) {
+			glDisable(GL_FOG);
+		}
+		break;
+
+	case kProjInstall:
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
 		glFrustum(-.5, .5, -aspect / 2, 0., 1., 4096.);
 		glTranslatef(0., 0., -64.);
+
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
+
+		if (_lighting) {
+			glEnable(GL_LIGHT0);
+		} else {
+			glDisable(GL_LIGHT0);
+		}
 		glTranslatef(0, -1024., -3092.);
-		return;
-	}
-	assert(mode == kProjGame);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glFrustum(-.5, .5, -aspect / 2, 0., 1., 1024);
-	glTranslatef(0., 0., -16.);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glScalef(1., -.5, -1.);
-	glRotatef(_cameraPitch, 0., 1., 0.);
-	glTranslatef(-_cameraPos.x, _cameraPos.y, -_cameraPos.z);
-	if (_fog) {
-		glEnable(GL_FOG);
-	} else {
-		glDisable(GL_FOG);
+
+		if (_fog) {
+			glDisable(GL_FOG);
+		}
+		break;
+
+	case kProjGame:
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glFrustum(-.5, .5, -aspect / 2, 0., 1., 1024);
+		glTranslatef(0., 0., -16.);
+
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		if (_lighting) {
+			glEnable(GL_LIGHT0);
+		} else {
+			glDisable(GL_LIGHT0);
+		}
+		glScalef(1., -.5, -1.);
+		glRotatef(_cameraPitch, 0., 1., 0.);
+		glTranslatef(-_cameraPos.x, _cameraPos.y, -_cameraPos.z);
+
+		if (_fog) {
+			glEnable(GL_FOG);
+		} else {
+			glDisable(GL_FOG);
+		}
+		break;
 	}
 }
 
 void Render::drawOverlay() {
-	if (_overlay.tex) {
-		_textureCache.updateTexture(_overlay.tex, _overlay.buf, _overlay.tex->bitmapW, _overlay.tex->bitmapH);
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		glOrtho(-1. / _aspectRatio, 1. / _aspectRatio, 0, _h, 0, 1);
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-		glDisable(GL_DEPTH_TEST);
+
+	const bool hasOverlayTexture = (_overlay.tex != 0);
+	const bool hasOverlayColor = (_overlay.r != 255 || _overlay.g != 255 || _overlay.b != 255);
+
+	if (!hasOverlayTexture && !hasOverlayColor) {
+		return;
+	}
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-1. / _aspectRatio, 1. / _aspectRatio, 0, _overlay.displayHeight, 0, 1);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	if (hasOverlayTexture) {
+		glColor4ub(255, 255, 255, 255);
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, _overlay.tex->id);
 		const GLfloat tU = _overlay.tex->u;
 		const GLfloat tV = _overlay.tex->v;
 		assert(tU != 0. && tV != 0.);
 		GLfloat uv[] = { 0., 0., tU, 0., tU, tV, 0., tV };
-		emitQuadTex2i(-1, 0, 2, _h, uv);
-		glEnable(GL_DEPTH_TEST);
+		emitQuadTex2i(-1, _overlay.y, 2, _overlay.h, uv);
 		glDisable(GL_TEXTURE_2D);
 	}
-	if (_overlay.r != 255 || _overlay.g != 255 || _overlay.b != 255) {
-		glColor4f(_overlay.r / 255., _overlay.g / 255., _overlay.b / 255., .8);
-		emitQuad2i(-1, 0, 2, _h);
-		glColor4f(1., 1., 1., 1.);
+	if (hasOverlayColor) {
+		glColor4ub(_overlay.r, _overlay.g, _overlay.b, 191);
+		emitQuad2i(-1, 0, 2, _overlay.displayHeight);
 		_overlay.r = _overlay.g = _overlay.b = 255;
+	}
+
+	++_framesCount;
+	if ((_framesCount & 31) == 0) {
+		struct timeval t1;
+		gettimeofday(&t1, 0);
+		const int msecs = (t1.tv_sec - _frameTimeStamp.tv_sec) * 1000 + (t1.tv_usec - _frameTimeStamp.tv_usec) / 1000;
+		_frameTimeStamp = t1;
+		if (msecs != 0) {
+			_framesPerSec = (int)(1000. * 32 / msecs);
+		}
 	}
 }
 

@@ -310,17 +310,16 @@ int Game::op_playSound(int argc, int32_t *argv) {
 	} else {
 		_snd.setVolume(volume);
 		_snd.setPan(pan);
-		if (key > 0) {
-			_snd.playSfx(o->objKey, key);
-		} else {
-			if (key == 0 && _currentObject == _objectsPtrTable[kObjPtrTarget]) {
+		if (key <= 0) {
+			if (_currentObject == _objectsPtrTable[kObjPtrTarget]) {
 				_snd.setVolume(127);
 			}
 			key = READ_LE_UINT16(o->anim.aniheadData + 6);
-			if (key != 0) {
-				_snd.playSfx(o->objKey, key);
+			if (key <= 0) {
+				return -1;
 			}
 		}
+		_snd.playSfx(o->objKey, key, (flags & 2) != 0);
 	}
 	return -1;
 }
@@ -1321,7 +1320,7 @@ int Game::op_clearTarget(int argc, int32_t *argv) {
 int Game::op_playCutscene(int argc, int32_t *argv) {
 	assert(argc == 1);
 	debug(kDebug_OPCODES, "Game::op_playCutscene() [%d]", argv[0]);
-	_cut.queue(argv[0]);
+	_cut->queue(argv[0]);
 	return -1;
 }
 
@@ -1454,13 +1453,7 @@ int Game::op_setCamera(int argc, int32_t *argv) {
 			}
 		} else {
 			// GameInput *inp = &_inputsTable[_objectsPtrTable[kObjPtrConrad]->customData[11]];
-			switch (param) {
-			case 7:
-				break;
-			default:
-				error("op_setCamera() unhandled param %d (_cameraViewKey %d)", param, _cameraViewKey);
-				break;
-			}
+			warning("op_setCamera() unhandled param %d (_cameraViewKey %d)", param, _cameraViewKey);
 		}
 	}
 	return -1;
@@ -2005,41 +1998,37 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 	assert(argc == 4);
 	debug(kDebug_OPCODES, "Game::op_updateFollowingObject() [%d, %d, %d, %d]", argv[0], argv[1], argv[2], argv[3]);
 
-	int16_t followingObjKey = argv[0];
+	int16_t followerObjKey = argv[0];
 	int16_t followedObjKey = argv[1];
 	int32_t specx = argv[2];
 	int32_t specz = argv[3];
 
-	GameObject *o_following;
-	if (followingObjKey == 0) {
-		o_following = _currentObject;
-	} else if ((o_following = getObjectByKey(followingObjKey)) == 0) {
-                return 0;
-        }
-	GameObject *o_followed;
-        if (followedObjKey == 0) {
-                o_followed = _currentObject;
-        } else if ((o_followed = getObjectByKey(followedObjKey)) == 0) {
-                return 0;
-        }
+	GameObject *o_follower = (followerObjKey == 0) ? _currentObject : getObjectByKey(followerObjKey);
+	if (!o_follower) {
+		return 0;
+	}
+	GameObject *o_followed = (followedObjKey == 0) ? _currentObject : getObjectByKey(followedObjKey);
+	if (!o_followed) {
+		return 0;
+	}
 
-	GameFollowingPoint *points = (_followingObjectsTable + o_following->customData[11])->points;
-	int *count = &o_following->customData[10];
-
+	GameFollowingPoint *points = (_followingObjectsTable + o_follower->customData[11])->points;
+	int *count = &o_follower->customData[10];
 	int xTo = o_followed->xPosParent + o_followed->xPos;
 	int zTo = o_followed->zPosParent + o_followed->zPos;
-	const int x1Col = ((o_following->xFrm1 - o_followed->xFrm1) >> 15) - 2;
-	const int z1Col = ((o_following->zFrm1 - o_followed->zFrm1) >> 15) - 2;
-	const int x2Col = ((o_following->xFrm2 - o_followed->xFrm2) >> 15) + 2;
-	const int z2Col = ((o_following->zFrm2 - o_followed->zFrm2) >> 15) + 2;
+	const int x1Col = ((o_follower->xFrm1 - o_followed->xFrm1) >> 15) - kFollowingMargin;
+	const int z1Col = ((o_follower->zFrm1 - o_followed->zFrm1) >> 15) - kFollowingMargin;
+	const int x2Col = ((o_follower->xFrm2 - o_followed->xFrm2) >> 15) + kFollowingMargin;
+	const int z2Col = ((o_follower->zFrm2 - o_followed->zFrm2) >> 15) + kFollowingMargin;
 	if (testObjectCollision2(o_followed, x1Col, z1Col, x2Col, z2Col)) {
 		fixCoordinates(o_followed, x1Col, z1Col, x2Col, z2Col, &xTo, &zTo);
 	}
+	static const uint32_t mask = 0xFFFFFFFE;
 	switch (*count) {
 	case -1: {
-			int xFrom = o_following->xPosParent + o_following->xPos;
-			int zFrom = o_following->zPosParent + o_following->zPos;
-			if (!testObjectCollision1(o_following, xFrom, zFrom, xTo, zTo, 0xFFFFFFFE) || _varsTable[32] != 0) {
+			int xFrom = o_follower->xPosParent + o_follower->xPos;
+			int zFrom = o_follower->zPosParent + o_follower->zPos;
+			if (!testObjectCollision1(o_follower, xFrom, zFrom, xTo, zTo, mask) || _varsTable[32] != 0) {
 				points[0].x = xTo;
 				points[0].z = zTo;
 				*count = 0;
@@ -2051,15 +2040,15 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 		}
 		break;
 	case 0: {
-			int xFrom = o_following->xPosParent + o_following->xPos;
-			int zFrom = o_following->zPosParent + o_following->zPos;
-			if (!testObjectCollision1(o_following, xFrom, zFrom, xTo, zTo, 0xFFFFFFFE) || _varsTable[32] != 0) {
+			int xFrom = o_follower->xPosParent + o_follower->xPos;
+			int zFrom = o_follower->zPosParent + o_follower->zPos;
+			if (!testObjectCollision1(o_follower, xFrom, zFrom, xTo, zTo, mask) || _varsTable[32] != 0) {
 				points[0].x = xTo;
 				points[0].z = zTo;
 				_currentObject->setData(specx, points[0].x);
 				_currentObject->setData(specz, points[0].z);
 			} else {
-				fixCoordinates2(o_following, xFrom, zFrom, &points[0].x, &points[0].z, &xTo, &zTo);
+				fixCoordinates2(o_follower, xFrom, zFrom, &points[0].x, &points[0].z, &xTo, &zTo);
 				points[1].x = xTo;
 				points[1].z = zTo;
 				*count = 1;
@@ -2067,9 +2056,9 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 		}
 		break;
 	default: {
-			int xFrom = o_following->xPosParent + o_following->xPos;
-			int zFrom = o_following->zPosParent + o_following->zPos;
-			if (!testObjectCollision1(o_following, xFrom, zFrom, xTo, zTo, 0xFFFFFFFE) || _varsTable[32] != 0) {
+			int xFrom = o_follower->xPosParent + o_follower->xPos;
+			int zFrom = o_follower->zPosParent + o_follower->zPos;
+			if (!testObjectCollision1(o_follower, xFrom, zFrom, xTo, zTo, mask) || _varsTable[32] != 0) {
 				points[0].x = xTo;
 				points[0].z = zTo;
 				*count = 0;
@@ -2080,7 +2069,7 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 				for (int i = 0; i < *count - 1; i++) {
 					xFrom = points[i].x;
 					zFrom = points[i].z;
-					if (!testObjectCollision1(o_following, xFrom, zFrom, xTo, zTo, 0xFFFFFFFE) || _varsTable[32] != 0) {
+					if (!testObjectCollision1(o_follower, xFrom, zFrom, xTo, zTo, mask) || _varsTable[32] != 0) {
 						points[i + 1].x = xTo;
 						points[i + 1].z = zTo;
 						*count = i + 1;
@@ -2091,11 +2080,11 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 				if (!flag) {
 					xFrom = points[*count - 1].x;
 					zFrom = points[*count - 1].z;
-					if (!testObjectCollision1(o_following, xFrom, zFrom, xTo, zTo, 0xFFFFFFFE) || _varsTable[32] != 0) {
+					if (!testObjectCollision1(o_follower, xFrom, zFrom, xTo, zTo, mask) || _varsTable[32] != 0) {
 						points[*count].x = xTo;
 						points[*count].z = zTo;
 					} else {
-						fixCoordinates2(o_following, points[*count - 1].x, points[*count - 1].z, &points[*count].x, &points[*count].z, &xTo, &zTo);
+						fixCoordinates2(o_follower, points[*count - 1].x, points[*count - 1].z, &points[*count].x, &points[*count].z, &xTo, &zTo);
 						if (*count < kFollowingObjectPointsTableSize - 1) {
 							(*count)++;
 							points[*count].x = xTo;
@@ -2103,9 +2092,9 @@ int Game::op_updateFollowingObject(int argc, int32_t *argv) {
 						}
 					}
 				}
-				xFrom = o_following->xPosParent + o_following->xPos;
-				zFrom = o_following->zPosParent + o_following->zPos;
-				if (!testObjectCollision1(o_following, xFrom, zFrom, points[1].x, points[1].z, 0xFFFFFFFE) || _varsTable[32] != 0) {
+				xFrom = o_follower->xPosParent + o_follower->xPos;
+				zFrom = o_follower->zPosParent + o_follower->zPos;
+				if (!testObjectCollision1(o_follower, xFrom, zFrom, points[1].x, points[1].z, mask) || _varsTable[32] != 0) {
 					for (int i = 0; i <= *count; i++) {
 						points[i].x = points[i + 1].x;
 						points[i].z = points[i + 1].z;
@@ -2167,24 +2156,20 @@ int Game::op_setupFollowingObject(int argc, int32_t *argv) {
 	assert(argc == 3);
 	debug(kDebug_OPCODES, "Game::op_setupFollowingObject() [%d, %d, %d]", argv[0], argv[1], argv[2]);
 
-	int16_t followingObjKey = argv[0];
+	int16_t followerObjKey = argv[0];
 	int16_t followedObjKey = argv[1];
 	int16_t key = argv[2];
 
-        GameObject *o_following;
-        if (followingObjKey == 0) {
-                o_following = _currentObject;
-        } else if ((o_following = getObjectByKey(followingObjKey)) == 0) {
-                return 0;
-        }
-        GameObject *o_followed;
-        if (followedObjKey == 0) {
-                o_followed = _currentObject;
-        } else if ((o_followed = getObjectByKey(followedObjKey)) == 0) {
-                return 0;
-        }
+	GameObject *o_follower = (followerObjKey == 0) ? _currentObject : getObjectByKey(followerObjKey);
+	if (!o_follower) {
+		return 0;
+	}
+	GameObject *o_followed = (followedObjKey == 0) ? _currentObject : getObjectByKey(followedObjKey);
+	if (!o_followed) {
+		return 0;
+	}
 
-        GameFollowingPoint *points = _followingObjectsTable[o_following->customData[11]].points;
+        GameFollowingPoint *points = _followingObjectsTable[o_follower->customData[11]].points;
 	const int xTo = o_followed->xPosParent + o_followed->xPos;
 	const int zTo = o_followed->zPosParent + o_followed->zPos;
 	int count = 0;
@@ -2198,7 +2183,7 @@ int Game::op_setupFollowingObject(int argc, int32_t *argv) {
 		key = o->customData[0];
 		++count;
 	}
-	o_following->customData[10] = count;
+	o_follower->customData[10] = count;
         points[count].x = xTo;
         points[count].z = zTo;
 	return -1;

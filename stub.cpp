@@ -18,7 +18,7 @@
 static const char *USAGE =
 	"Fade2Black/OpenGL\n"
 	"Usage: f2b [OPTIONS]...\n"
-	"  --datapath=PATH             Path to data files (default '.')\n"
+	"  --datapath=PATH             Path to PC data files (default '.')\n"
 	"  --language=EN|FR|GR|SP|IT   Language files to use (default 'EN')\n"
 	"  --playdemo                  Use inputs from .DEM files\n"
 	"  --level=NUM                 Start at level NUM\n"
@@ -28,10 +28,12 @@ static const char *USAGE =
 	"  --fullscreen                Fullscreen display (stretched)\n"
 	"  --fullscreen-ar             Fullscreen display (4:3 aspect ratio)\n"
 	"  --soundfont=FILE            SoundFont (.sf2) file for music\n"
-	"  --fog                       Enable fog rendering\n"
 	"  --texturefilter=FILTER      Texture filter (default 'linear')\n"
 	"  --texturescaler=NAME        Texture scaler (default 'scale2x')\n"
 	"  --mouse                     Enable mouse controls\n"
+	"  --no-fog                    Disable fog rendering\n"
+	"  --no-gouraud                Disable gouraud shading\n"
+	"  --psxpath=PATH              Path to PSX data files\n"
 ;
 
 static const struct {
@@ -79,29 +81,9 @@ static FileLanguage parseVoice(const char *voice, FileLanguage lang) {
 	}
 }
 
-static int getNextCutsceneNum(int num) {
-	switch (num) {
-	case 47: // logo ea
-		return 39;
-	case 39: // logo dsi
-		return 13;
-	case 13: // 'intro'
-		return 37;
-	case 37: // opening credits - 'title'
-		return 53;
-	case 53: // 'gendeb'
-		return 29;
-	// game completed
-	case 48: // closing credits - 'mgm'
-		return 44;
-	case 44: // fade to black - 'fade1'
-		return 13;
-	}
-	return -1;
-}
-
 static char *_dataPath;
 static char *_savePath;
+static char *_psxDataPath;
 
 struct GameStub_F2B : GameStub {
 
@@ -122,6 +104,8 @@ struct GameStub_F2B : GameStub {
 	int _state, _nextState;
 	int _slotState;
 	bool _loadState, _saveState;
+	int _screenshot;
+	bool _takeScreenshot;
 	char *_soundFont;
 	RenderParams _renderParams;
 	char *_textureFilter;
@@ -133,6 +117,8 @@ struct GameStub_F2B : GameStub {
 		memset(&_params, 0, sizeof(_params));
 		_soundFont = 0;
 		memset(&_renderParams, 0, sizeof(_renderParams));
+		_renderParams.fog = true;
+		_renderParams.gouraud = true;
 		_textureFilter = 0;
 		_textureScaler = 0;
 	}
@@ -142,7 +128,11 @@ struct GameStub_F2B : GameStub {
 		switch (_state) {
 		case kStateCutscene:
 			_render->resizeOverlay(0, 0);
-			_render->setPalette(_g->_screenPalette, 0, 256);
+			// redraw screen after cutscene played at the end of a level
+			if (_g->_changeLevel && _g->_displayPsxLevelLoadingScreen) {
+				_g->_displayPsxLevelLoadingScreen = 1;
+				_g->displayPsxLevelLoadingScreen();
+			}
 			break;
 		case kStateCabinet:
 			_g->finiCabinet();
@@ -150,11 +140,14 @@ struct GameStub_F2B : GameStub {
 		case kStateMenu:
 			_g->finiMenu();
 			break;
+		case kStateInstaller:
+			_g->finiInstaller();
+			break;
 		}
 		// init
 		switch (state) {
 		case kStateCutscene:
-			_g->_cut.load(_g->_cut._numToPlay);
+			_g->_cut->load(_g->_cut->_numToPlay);
 			break;
 		case kStateGame:
 			_g->updatePalette();
@@ -184,28 +177,27 @@ struct GameStub_F2B : GameStub {
 		g_utilDebugMask = kDebug_INFO;
 		while (1) {
 			static struct option options[] = {
-				{ "datapath",  required_argument, 0, 1 },
-				{ "language",  required_argument, 0, 2 },
-				{ "playdemo",  no_argument,       0, 3 },
-				{ "level",     required_argument, 0, 4 },
-				{ "voice",     required_argument, 0, 5 },
-				{ "subtitles", no_argument,      0, 6 },
-				{ "savepath",  required_argument, 0, 7 },
-				{ "debug",     required_argument, 0, 8 },
-				{ "fullscreen",    no_argument,   0,  9 },
-				{ "fullscreen-ar", no_argument,   0, 10 },
-				{ "alt-level", required_argument, 0, 11 },
-				{ "soundfont", required_argument, 0, 12 },
-				{ "fog",       no_argument,       0, 13 },
-				{ "texturefilter", required_argument, 0, 14 },
-				{ "texturescaler", required_argument, 0, 15 },
-				{ "mouse",     no_argument,       0, 16 },
-				{ "touch",     no_argument,       0, 17 },
-#ifdef F2B_DEBUG
-				{ "xpos_conrad",    required_argument, 0, 100 },
-				{ "zpos_conrad",    required_argument, 0, 101 },
-				{ "init_state",     required_argument, 0, 103 },
-#endif
+				{ "datapath",      required_argument, 0, 1 },
+				{ "language",      required_argument, 0, 2 },
+				{ "playdemo",      no_argument,       0, 3 },
+				{ "level",         required_argument, 0, 4 },
+				{ "voice",         required_argument, 0, 5 },
+				{ "subtitles",     no_argument,       0, 6 },
+				{ "savepath",      required_argument, 0, 7 },
+				{ "debug",         required_argument, 0, 8 },
+				{ "fullscreen",    no_argument,       0, 9 },
+				{ "fullscreen-ar", no_argument,       0, 10 },
+				{ "alt-level",     required_argument, 0, 11 },
+				{ "soundfont",     required_argument, 0, 12 },
+				{ "texturefilter", required_argument, 0, 13 },
+				{ "texturescaler", required_argument, 0, 14 },
+				{ "mouse",         no_argument,       0, 15 },
+				{ "touch",         no_argument,       0, 16 },
+				{ "no-fog",        no_argument,       0, 17 },
+				{ "no-gouraud",    no_argument,       0, 18 },
+				{ "psxpath",       required_argument, 0, 19 },
+				// debug
+				{ "init-state",    required_argument, 0, 101 },
 				{ 0, 0, 0, 0 }
 			};
 			int index;
@@ -261,30 +253,29 @@ struct GameStub_F2B : GameStub {
 				_params.sf2 = _soundFont;
 				break;
 			case 13:
-				_renderParams.fog = true;
-				break;
-			case 14:
 				_textureFilter = strdup(optarg);
 				_renderParams.textureFilter = _textureFilter;
 				break;
-			case 15:
+			case 14:
 				_textureScaler = strdup(optarg);
 				_renderParams.textureScaler = _textureScaler;
 				break;
-			case 16:
+			case 15:
 				_params.mouseMode = true;
 				break;
-			case 17:
+			case 16:
 				_params.touchMode = true;
 				break;
-#ifdef F2B_DEBUG
-			case 100:
-				_params.xPosConrad = atoi(optarg);
+			case 17:
+				_renderParams.fog = false;
 				break;
-			case 101:
-				_params.zPosConrad = atoi(optarg);
+			case 18:
+				_renderParams.gouraud = false;
 				break;
-			case 102: {
+			case 19:
+				_psxDataPath = strdup(optarg);
+				break;
+			case 101: {
 					static struct {
 						const char *name;
 						int state;
@@ -302,7 +293,6 @@ struct GameStub_F2B : GameStub {
 					}
 				}
 				break;
-#endif
 			default:
 				printf("%s\n", USAGE);
 				return -1;
@@ -350,33 +340,49 @@ struct GameStub_F2B : GameStub {
 			_params.sf2 = _soundFont;
 		}
 		_renderParams.fog = true;
+		if (!fileInit(_fileLanguage, _fileVoice, "data", ".")) {
+#else
+		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : ".", _savePath ? _savePath : ".")) {
 #endif
-		if (!fileInit(_fileLanguage, _fileVoice, _dataPath ? _dataPath : "data", _savePath ? _savePath : ".")) {
-			warning("Unable to find datafiles");
+			warning("Unable to find PC datafiles");
 			return -2;
+		}
+		if (_psxDataPath) {
+			if (!fileInitPsx(_psxDataPath)) {
+				warning("Unable to find PlayStation datafiles");
+				// PSX data is optional
+			}
 		}
 		_render = new Render(&_renderParams);
 		_g = new Game(_render, &_params);
 		_g->init();
-		_g->_cut._numToPlay = 47;
+		_g->_cut->_numToPlay = 47;
 		_state = -1;
 		setState(_nextState);
 		_nextState = _state;
 		_slotState = 0;
 		_loadState = _saveState = false;
+		_screenshot = 0;
+		_takeScreenshot = false;
 		return 0;
 	}
 	virtual void quit() {
 		delete _g;
+		_g = 0;
 		delete _render;
+		_render = 0;
 		free(_dataPath);
 		_dataPath = 0;
 		free(_savePath);
 		_savePath = 0;
+		free(_psxDataPath);
+		_psxDataPath = 0;
 		free(_soundFont);
+		_soundFont = 0;
 		free(_textureFilter);
+		_textureFilter = 0;
 		free(_textureScaler);
-		_dataPath = 0;
+		_textureScaler = 0;
 	}
 	virtual StubMixProc getMixProc(int rate, int fmt, void (*lock)(int)) {
 		StubMixProc mix;
@@ -384,8 +390,6 @@ struct GameStub_F2B : GameStub {
 		mix.data = &_g->_snd._mix;
 		_g->_snd._mix.setFormat(rate, fmt);
 		_g->_snd._mix._lock = lock;
-		_g->_snd._musicKey = 0;
-		_g->playMusic(1);
 		return mix;
 	}
 	virtual void queueKeyInput(int keycode, int pressed) {
@@ -455,6 +459,16 @@ struct GameStub_F2B : GameStub {
 		case kKeyCodeCheatLifeCounter:
 			_g->_cheats ^= kCheatLifeCounter;
 			break;
+		case kKeyCodeToggleFog:
+			if (_renderParams.fog) { // only toggle if it has not been disabled
+				_render->toggleFog();
+			}
+			break;
+		case kKeyCodeToggleGouraudShading:
+			if (_renderParams.gouraud) {
+				_render->toggleGouraudShading();
+			}
+			break;
 		}
 	}
 	void queueTouchInput(int pointer, int x, int y, int down) {
@@ -472,21 +486,10 @@ struct GameStub_F2B : GameStub {
 		_nextState = _state;
 		switch (_state) {
 		case kStateCutscene:
-			if (!_g->_cut.update(ticks)) {
-				_g->_cut.unload();
-				int cutsceneNum = _g->_cut._numToPlay;
-				if (!_g->_cut.isInterrupted()) {
-					do {
-						int num = _g->_cut.dequeue();
-						if (num < 0) {
-							num = getNextCutsceneNum(_g->_cut._numToPlay);
-						}
-						_g->_cut._numToPlay = num;
-					} while (_g->_cut._numToPlay >= 0 && !_g->_cut.load(_g->_cut._numToPlay));
-				} else {
-					_g->_cut._numToPlay = -1;
-				}
-				if (_g->_cut._numToPlay < 0) {
+			if (!_g->updateCutscene(ticks)) {
+				Cutscene *cut = _g->_cut;
+				const int cutsceneNum = cut->changeToNext();
+				if (cut->_numToPlay < 0) {
 					_nextState = kStateGame;
 					if (_g->_level == kLevelGameOver || (g_isDemo && cutsceneNum == 43)) {
 						// restart
@@ -509,6 +512,11 @@ struct GameStub_F2B : GameStub {
 				_g->_endGame = false;
 				_g->initLevel();
 			}
+			if (_g->_displayPsxLevelLoadingScreen) {
+				if (_g->displayPsxLevelLoadingScreen()) {
+					break;
+				}
+			}
 			_g->updateGameInput();
 			_g->doTick();
 			if (_g->inp.inventoryKey) {
@@ -517,7 +525,7 @@ struct GameStub_F2B : GameStub {
 			} else if (_g->inp.escapeKey) {
 				_g->inp.escapeKey = false;
 				_nextState = kStateMenu;
-			} else if (_g->_cut._numToPlay >= 0 && _g->_cut._numToPlayCounter == 0) {
+			} else if (_g->_cut->_numToPlay >= 0 && _g->_cut->_numToPlayCounter == 0) {
 				_nextState = kStateCutscene;
 			} else if (_g->_cabinetItemCount != 0) {
 				_nextState = kStateCabinet;
@@ -582,12 +590,17 @@ struct GameStub_F2B : GameStub {
 		if (_saveState) {
 			if (_state == kStateGame) {
 				if (_g->saveGameState(_slotState)) {
-					_g->saveScreenshot(_slotState);
+					_g->saveScreenshot(true, _slotState);
 					_g->setGameStateSave(_slotState);
 					debug(kDebug_INFO, "Saved game state to slot %d", _slotState);
 				}
 			}
 			_saveState = false;
+		}
+		if (_takeScreenshot) {
+			_g->saveScreenshot(false, _screenshot);
+			_takeScreenshot = false;
+			debug(kDebug_INFO, "Saved screenshot %d", _screenshot);
 		}
 	}
 	virtual void saveState(int slot) {
@@ -598,10 +611,17 @@ struct GameStub_F2B : GameStub {
 		_slotState = slot;
 		_loadState = true;
 	}
+	virtual void takeScreenshot() {
+		++_screenshot;
+		_takeScreenshot = true;
+	}
+	virtual bool shouldVibrate() {
+		return _g->_conradHit == 2;
+	}
 };
 
 extern "C" {
 	GameStub *GameStub_create() {
 		return new GameStub_F2B;
 	}
-};
+}

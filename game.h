@@ -8,6 +8,7 @@
 
 #include "util.h"
 #include "cutscene.h"
+#include "cutscenepsx.h"
 #include "resource.h"
 #include "sound.h"
 #include "spritecache.h"
@@ -77,6 +78,9 @@ enum {
 	kSaveLoadTexKey = 10000,
 	kSaveLoadSlots = 8,
 	kPlayerInputPointersCount = 4,
+	kFollowingMargin = 2,
+	kTexKeyBlob = 20000,
+	kTexKeyWall = 30000,
 };
 
 enum {
@@ -136,8 +140,14 @@ enum {
 
 enum {
 	kCheatLifeCounter = 1 << 0,
+	// control tweak #1 - gun will automatically reload if ammo equals 0, this avoids using the 'enter' key to reload
 	kCheatAutoReloadGun = 1 << 1,
-	kCheatUseButtonToShoot = 1 << 2,
+	// control tweak #2 - space can be used to shoot, this avoids using the 'ctrl' key to shoot
+	kCheatActivateButtonToShoot = 1 << 2,
+	// control tweak #3 - pressing 'up' or 'down' when shooting allows to do back and foot steps, this avoids using the 'pageup' and 'pagedown' keys
+	kCheatStepWithUpDownInShooting = 1 << 3,
+	// control tweak #4 - front and back steps when pressing 'ctrl' with 'up' and 'down' keys, this avois using the 'pageup' and 'pagedown' keys
+	kCheatShootButtonToStep = 1 << 4,
 };
 
 struct CollisionSlot;
@@ -426,10 +436,9 @@ struct DrawNumber {
 struct Render;
 
 struct GameParams {
-	GameParams() : playDemo(false), levelNum(0), xPosConrad(0), zPosConrad(0), subtitles(false), sf2(0), mouseMode(false), touchMode(false) {}
+	GameParams() : playDemo(false), levelNum(0), subtitles(false), sf2(0), mouseMode(false), touchMode(false) {}
 	bool playDemo;
 	int levelNum;
-	int xPosConrad, zPosConrad;
 	bool subtitles;
 	const char *sf2;
 	bool mouseMode;
@@ -444,7 +453,7 @@ struct Game {
 	typedef int (Game::*RayCastCallbackType)(GameObject *o, CellMap *cell, int x, int z);
 
 	Resource _res;
-	Cutscene _cut;
+	Cutscene *_cut;
 	Sound _snd;
 	Render *_render;
 	GameParams _params;
@@ -452,6 +461,7 @@ struct Game {
 	Random _rnd, _rnd2;
 	int _cheats;
 	int _gameStateMsg;
+	bool _musicPaused;
 
 	DrawBuffer _drawCharBuf;
 	DrawNumber _drawNumber;
@@ -461,6 +471,7 @@ struct Game {
 	bool _changeLevel;
 	int _room, _roomPrev;
 	bool _endGame;
+	int _displayPsxLevelLoadingScreen;
 	int _mainLoopCurrentMode;
 	int _conradHit;
 
@@ -474,7 +485,6 @@ struct Game {
 	GameObject *_changedObjectsTable[kChangedObjectsTableSize];
 	int _followingObjectsCount;
 	GameFollowingObject *_followingObjectsTable;
-	int16_t _currentObjectKey;
 	int16_t _conradObjectKey, _worldObjectKey;
 	int16_t _currentScriptKey;
 	int16_t _newPlayerObject;
@@ -631,6 +641,7 @@ struct Game {
 	// game.cpp
 	void clearGlobalData();
 	void clearLevelData();
+	void freeLevelData();
 	void countObjects(int16_t parentKey);
 	int gotoStartScriptAnim();
 	int gotoNextScriptAnim();
@@ -658,6 +669,7 @@ struct Game {
 	void updateSceneTextures();
 	void initScene();
 	void init();
+	bool displayPsxLevelLoadingScreen();
 	void initLevel(bool keepInventoryObjects = false);
 	void setupConradObject();
 	void changeRoom(int room);
@@ -700,7 +712,7 @@ struct Game {
 	void drawSceneObjectShadow(SceneObject *so);
 	void drawSceneObjectMesh(SceneObject *so, int flags = 0);
 	void redrawScene();
-	void drawWall(const Vertex *vertices, int verticesCount, int texture);
+	void drawWall(const Vertex *vertices, int verticesCount, int texture, int type);
 	bool redrawSceneGridCell(int x, int z, CellMap *cell);
 	void redrawSceneGroundWalls();
 	bool findRoom(const CollisionSlot *colSlot, int room1, int room2);
@@ -733,6 +745,7 @@ struct Game {
 	void displayTarget(int cx, int cy);
 	int getShootPos(int16_t objKey, int *x, int *y, int *z);
 	void drawSprite(int x, int y, int sprKey);
+	bool updateCutscene(uint32_t ticks);
 
 	// camera.cpp
 	void updateObserverSinCos();
@@ -759,20 +772,21 @@ struct Game {
 	bool setCollisionSlotsUsingCallback2(GameObject *o, int x, int z, CollisionSlotCallbackType2 callback, uint32_t a, CollisionSlot2 *slot2);
 	bool setCollisionSlotsUsingCallback3(GameObject *o, int x, int z, CollisionSlotCallbackType3 callback, uint32_t a, int b, CollisionSlot2 *slot2);
 	void addObjectToDrawList(CellMap *cell);
-	bool testCollisionSlotRect(GameObject *o1, GameObject *o2);
-	bool testCollisionSlotRect2(GameObject *o1, GameObject *o2, int x, int z);
+	bool testCollisionSlotRect(GameObject *o1, GameObject *o2) const;
+	bool testCollisionSlotRect2(GameObject *o1, GameObject *o2, int x, int z) const;
 	bool collisionSlotCb3(GameObject *o, CellMap *cell, int x, int z, uint32_t a);
 	bool collisionSlotCb4(GameObject *o, CellMap *cell, int x, int z, uint32_t a, int b);
 	void updateCurrentObjectCollisions();
 	bool collisionSlotCb5(GameObject * ptr_object, CellMap *map, int x, int z, uint32_t mask8);
 	int testObjectCollision2(GameObject *o, int dx1, int dz1, int dx2, int dz2);
 	void fixCoordinates(GameObject *o, int dx1, int dz1, int dx2, int dz2, int *fx, int *fz);
-	int testObjectCollision1(GameObject *o, int xFrom, int zFrom, int xTo, int zTo, int mask8);
+	int testObjectCollision1(GameObject *o, int xFrom, int zFrom, int xTo, int zTo, uint32_t mask8);
 	void fixCoordinates2(GameObject *o_following, int x1, int z1, int *x2, int *z2, int *x3, int *z3);
 
 	// icons.cpp
 	void loadIcon(int16_t key, int num, int x, int y, int action);
 	void initIcons(int iconMode);
+	void finiIcons();
 	void drawIcons();
 
 	// font.cpp
@@ -780,7 +794,7 @@ struct Game {
 	void initFonts();
 	void drawChar(int x, int y, SpriteImage *spr, int color);
 	void drawString(int x, int y, const char *str, int font, int color);
-	void getStringRect(const char *str, int font, int *w, int *h);
+	int getStringRect(const char *str, int font, int *w, int *h);
 	void setStringPos(GamePlayerMessage *msg);
 
 	// input.cpp
@@ -794,6 +808,7 @@ struct Game {
 
 	// installer.cpp
 	void initInstaller();
+	void finiInstaller();
 	void doInstaller();
 
 	// inventory.cpp
@@ -900,8 +915,7 @@ struct Game {
 	// saveload.cpp
 	bool saveGameState(int num);
 	bool loadGameState(int num);
-	void saveScreenshot(int num);
-	const char *getLevelName(int level) const;
+	void saveScreenshot(bool saveState, int num);
 	bool hasSavedGameState(int num) const;
 };
 

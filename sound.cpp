@@ -160,11 +160,13 @@ static uint32_t makeId(uint16_t a, uint16_t b = 0xFFFF) {
 	return (a << 16) | b;
 }
 
-void Sound::playSfx(int16_t objKey, int16_t sndKey) {
+void Sound::playSfx(int16_t objKey, int16_t sndKey, bool loop) {
 	if (sndKey != -1) {
 		const uint32_t id = makeId(objKey, sndKey);
-		if (_mix.isWavPlaying(id)) {
-			// already playing
+		if (_mix.isWavPlaying(id)) { // already playing
+			if (loop) {
+				_mix.loopWav(id, 2);
+			}
 			return;
 		}
 		const uint8_t *p_sndtype = _res->getData(kResType_SND, sndKey, "SNDTYPE");
@@ -226,5 +228,18 @@ void Sound::playMidi(const char *name) {
 		_mix.playXmi(_fpSng, ms->size);
 	} else {
 		warning("MIDI file '%s' not found", name);
+	}
+}
+
+void Sound::playVag(int num) {
+	if (g_hasPsx) {
+		const uint32_t size = _res->seekVag(num);
+		_mix.playXa(_res->_fileSon, size, num);
+	}
+}
+
+void Sound::stopVag(int num) {
+	if (g_hasPsx) {
+		_mix.stopXa(num);
 	}
 }

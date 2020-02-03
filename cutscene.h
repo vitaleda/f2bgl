@@ -35,6 +35,7 @@ enum {
 	kSubtitleMessagesCount = 16,
 	kCutscenePlaybackQueueSize = 4,
 	kCutsceneFrameDelay = 1000 / 12,
+	kCutsceneDisplayWidth = 320,
 	kCutsceneDisplayHeight = 200,
 };
 
@@ -64,6 +65,7 @@ struct Cutscene {
 	struct {
 		const char *data;
 		int duration;
+		int linesCount;
 	} _msgs[kSubtitleMessagesCount];
 	int _msgsCount;
 	int _playQueue[kCutscenePlaybackQueueSize];
@@ -72,7 +74,7 @@ struct Cutscene {
 	uint32_t _frameTicks;
 
 	Cutscene(Render *render, Game *g, Sound *snd);
-	~Cutscene();
+	virtual ~Cutscene();
 
 	bool readFileHeader(CinFileHeader *hdr);
 	bool readFrameHeader(CinFrameHeader *hdr);
@@ -80,14 +82,15 @@ struct Cutscene {
 	void updatePalette(int palType, int colorsCount, const uint8_t *p);
 	void decodeImage(const uint8_t *frameData);
 	void updateMessages();
-	bool load(int num);
-	void unload();
+	virtual bool load(int num);
+	virtual void unload();
 	bool play();
 	void drawFrame();
-	bool update(uint32_t ticks);
+	virtual bool update(uint32_t ticks);
 	bool isInterrupted() const;
 	void queue(int num, int counter = 0);
 	int dequeue();
+	int changeToNext();
 };
 
 #endif // CUTSCENE_H__

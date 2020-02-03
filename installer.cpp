@@ -94,6 +94,14 @@ struct Installer {
 		}
 	}
 
+	void fini() {
+		for (int i = 0; i < kInstallMeshCount; ++i) {
+			free(_meshesTable[i].vertices);
+			free(_meshesTable[i].meshData);
+		}
+		memset(_meshesTable, 0, sizeof(_meshesTable));
+	}
+
 	void loadInstallData(int fileType) {
 		int fileSize = 0;
 		File *fp = fileOpen(kInstallFileNames[fileType], &fileSize, kFileType_INSTDATA, false);
@@ -151,9 +159,6 @@ struct Installer {
 			m3d->verticesCount = READ_LE_UINT16(buf + offset); offset += 2;
 			m3d->vertices = (Vertex *)malloc(m3d->verticesCount * sizeof(Vertex));
 			if (m3d->vertices) {
-				int xmin, xmax;
-				int ymin, ymax;
-				int zmin, zmax;
 				for (int i = 0; i < m3d->verticesCount; ++i) {
 					const int x = (int16_t)READ_LE_UINT16(buf + offset); offset += 2;
 					const int y = (int16_t)READ_LE_UINT16(buf + offset); offset += 2;
@@ -162,20 +167,27 @@ struct Installer {
 					m3d->vertices[i].x = x;
 					m3d->vertices[i].y = y / 2;
 					m3d->vertices[i].z = z;
-					if (i == 0) {
-						xmin = xmax = x;
-						ymin = ymax = y;
-						zmin = zmax = z;
-					} else {
+				}
+				if (0 && m3d->verticesCount > 0) { /* compute bounding box */
+					int xmin, xmax;
+					xmin = xmax = m3d->vertices[0].x;
+					int ymin, ymax;
+					ymin = ymax = m3d->vertices[0].y;
+					int zmin, zmax;
+					zmin = zmax = m3d->vertices[0].z;
+					for (int i = 1; i < m3d->verticesCount; ++i) {
+						const int x = m3d->vertices[i].x;
 						if (xmin > x) xmin = x;
 						if (xmax < x) xmax = x;
+						const int y = m3d->vertices[i].y;
 						if (ymin > y) ymin = y;
 						if (ymax < y) ymax = y;
+						const int z = m3d->vertices[i].z;
 						if (zmin > z) zmin = z;
 						if (zmax < z) zmax = z;
 					}
+					debug(kDebug_INSTALL, "bounds [%d,%d;%d,%d;%d;%d]", xmin, xmax, ymin, ymax, zmin, zmax);
 				}
-				debug(kDebug_INSTALL, "bounds [%d,%d;%d,%d;%d;%d]", xmin, xmax, ymin, ymax, zmin, zmax);
 			}
 			const int dataSize = size - m3d->verticesCount * 6 * sizeof(uint16_t) - 4;
 			m3d->meshData = (uint8_t *)malloc(dataSize);
@@ -214,6 +226,7 @@ struct Installer {
 	void update(const PlayerInput &inp) {
 		_render->clearScreen();
 		_render->setupProjection(kProjInstall);
+		_render->setIgnoreDepth(false);
 
 		_render->beginObjectDraw(0, 0, 0, _logoPitch, kPosShift);
 		drawInstallMeshF3D(&_meshesTable[kInstallMesh_LOGO]);
@@ -235,6 +248,10 @@ static Installer _installer;
 void Game::initInstaller() {
 	_installer._render = _render;
 	_installer.init();
+}
+
+void Game::finiInstaller() {
+	_installer.fini();
 }
 
 void Game::doInstaller() {

@@ -13,14 +13,10 @@
 #include "scaler.h"
 #include "texturecache.h"
 
-static const int kDefaultTexBufSize = 320 * 200;
+static const int kLutTextureBufferSize = 320 * 200;
 
-uint16_t convert_RGBA_5551(int r, int g, int b) {
+static uint16_t convert_RGBA_5551(int r, int g, int b) {
 	return ((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1;
-}
-
-uint16_t convert_BGRA_1555(int r, int g, int b) {
-	return 0x8000 | ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
 }
 
 static const struct {
@@ -29,9 +25,6 @@ static const struct {
 	int type;
 	uint16_t (*convertColor)(int, int, int);
 } _formats[] = {
-#ifdef __amigaos4__
-	{ GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, &convert_BGRA_1555 },
-#endif
 #ifdef USE_GLES
 	{ GL_RGBA, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, &convert_RGBA_5551 },
 #else
@@ -57,14 +50,15 @@ static const struct {
 	{ point1x, "point1x", 1 },
 	{ point2x, "point2x", 2 },
 	{ scale2x, "scale2x", 2 },
-	{ eagle2x, "eagle2x", 2 },
 	{ point3x, "point3x", 3 },
 	{ scale3x, "scale3x", 3 },
 	{ 0, 0, 0 },
 };
 
+static const int _fmt = 0;
+
 TextureCache::TextureCache()
-	: _fmt(0), _texturesListHead(0), _texturesListTail(0) {
+	: _texturesListHead(0), _texturesListTail(0) {
 	memset(_clut, 0, sizeof(_clut));
 	_texBuf = 0;
 	_npotTex = false;
@@ -108,7 +102,7 @@ void TextureCache::init(const char *filter, const char *scaler) {
 		}
 	}
 	if (_scalers[_scaler].factor != 1) {
-		_texBuf = (uint16_t *)malloc(kDefaultTexBufSize * sizeof(uint16_t));
+		_texBuf = (uint16_t *)malloc(kLutTextureBufferSize * sizeof(uint16_t));
 	}
 }
 
@@ -182,18 +176,18 @@ void TextureCache::convertTexture(const uint8_t *src, int w, int h, const uint16
 	if (_scalers[_scaler].factor == 1) {
 		for (int y = 0; y < h; ++y) {
 			for (int x = 0; x < w; ++x) {
-				dst[x] = clut[src[x]];
+				dst[x] = clut[*src++];
 			}
 			dst += dstPitch;
-			src += w;
 		}
 	} else {
-		assert(w * h <= kDefaultTexBufSize);
+		assert(w * h <= kLutTextureBufferSize);
+		int offset = 0;
 		for (int y = 0; y < h; ++y) {
 			for (int x = 0; x < w; ++x) {
-				_texBuf[y * w + x] = clut[src[x]];
+				_texBuf[offset + x] = clut[*src++];
 			}
-			src += w;
+			offset += w;
 		}
 		_scalers[_scaler].proc(dst, dstPitch, _texBuf, w, w, h);
 	}
@@ -282,12 +276,29 @@ void TextureCache::destroyTexture(Texture *texture) {
 	delete texture;
 }
 
-void TextureCache::updateTexture(Texture *t, const uint8_t *data, int w, int h) {
+void TextureCache::updateTexture(Texture *t, const uint8_t *data, int w, int h, bool rgb, const uint8_t *pal) {
 	assert(t->bitmapW == w && t->bitmapH == h);
-	memcpy(t->bitmapData, data, w * h);
+	if (rgb) {
+		assert(t->bitmapData == 0);
+	} else {
+		memcpy(t->bitmapData, data, w * h);
+	}
 	uint16_t *texData = (uint16_t *)calloc(t->texW * t->texH, sizeof(uint16_t));
 	if (texData) {
-		convertTexture(t->bitmapData, t->bitmapW, t->bitmapH, _clut, texData, t->texW);
+		if (rgb) {
+			uint16_t *p = texData;
+			for (int y = 0; y < h; ++y) {
+				for (int x = 0; x < w; ++x) {
+					p[x] = _formats[_fmt].convertColor(data[0], data[1], data[2]); data += 4;
+				}
+				p += t->texW;
+			}
+		} else {
+			assert(pal);
+			uint16_t clut[256];
+			convertPalette(pal, clut);
+			convertTexture(t->bitmapData, t->bitmapW, t->bitmapH, clut, texData, t->texW);
+		}
 		glBindTexture(GL_TEXTURE_2D, t->id);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, t->texW, t->texH, _formats[_fmt].format, _formats[_fmt].type, texData);
 		free(texData);

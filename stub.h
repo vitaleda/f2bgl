@@ -16,16 +16,16 @@ enum {
 	kKeyCodeRight,
 	kKeyCodeUp,
 	kKeyCodeDown,
-	kKeyCodeAlt,     // gun
+	kKeyCodeAlt,     // toggle gun mode
 	kKeyCodeCtrl,    // shoot
 	kKeyCodeShift,   // walk
-	kKeyCodeSpace,   // use / open
-	kKeyCodeReturn,  // recharge gun
-	kKeyCodeTab,     // skip cutscene
+	kKeyCodeSpace,   // activate
+	kKeyCodeReturn,  // reload gun
+	kKeyCodeTab,     // change inventory category
 	kKeyCodeEscape,  // menu
 	kKeyCodeI,       // inventory
 	kKeyCodeJ,       // jump
-	kKeyCodeU,
+	kKeyCodeU,       // use
 	kKeyCode1,       // item #1
 	kKeyCode2,       // item #2
 	kKeyCode3,       // item #3
@@ -35,6 +35,8 @@ enum {
 	kKeyCodePageDown, // back foot step
 	kKeyCodeFarNear,
 	kKeyCodeCheatLifeCounter,
+	kKeyCodeToggleFog,
+	kKeyCodeToggleGouraudShading,
 };
 
 enum {
@@ -57,6 +59,8 @@ struct GameStub {
 	virtual void drawGL() = 0;
 	virtual void loadState(int slot) = 0;
 	virtual void saveState(int slot) = 0;
+	virtual void takeScreenshot() = 0;
+	virtual bool shouldVibrate() = 0;
 };
 
 extern "C" {

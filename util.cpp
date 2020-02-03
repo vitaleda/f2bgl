@@ -58,10 +58,10 @@ char *stringNextToken(char **p) {
 
 void debug(int debugChannel, const char *msg, ...) {
 	if (g_utilDebugMask & debugChannel) {
-		char buf[256];
+		char buf[1024];
 		va_list va;
 		va_start(va, msg);
-		vsprintf(buf, msg, va);
+		vsnprintf(buf, sizeof(buf), msg, va);
 		va_end(va);
 		fprintf(stdout, "%s\n", buf);
 		fflush(stdout);
@@ -72,7 +72,7 @@ void warning(const char *msg, ...) {
 	char buf[256];
 	va_list va;
 	va_start(va, msg);
-	vsprintf(buf, msg, va);
+	vsnprintf(buf, sizeof(buf), msg, va);
 	va_end(va);
 	fprintf(stdout, "WARNING: %s!\n", buf);
 	fflush(stdout);
@@ -82,7 +82,7 @@ void error(const char *msg, ...) {
 	char buf[256];
 	va_list va;
 	va_start(va, msg);
-	vsprintf(buf, msg, va);
+	vsnprintf(buf, sizeof(buf), msg, va);
 	va_end(va);
 	fprintf(stdout, "ERROR: %s!\n", buf);
 	fflush(stdout);

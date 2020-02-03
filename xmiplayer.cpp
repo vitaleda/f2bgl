@@ -63,7 +63,17 @@ struct XmiPlayer_WildMidi : XmiPlayer {
 				fileClose(fp);
 			}
 		}
-		const int ret = WildMidi_Init(path, mixingRate, WM_MO_LOG_VOLUME);
+		//
+		// Enabling 'enhanced resampling' option will make the WildMidi code
+		// occupying most of the CPU time when playing (tested on 0.4.2).
+		// Linear resampling (default) sounds good enough in my tests, so
+		// let's use that.
+		//
+		// 330,005,146  ???:WildMidi_GetOutput [/usr/lib/x86_64-linux-gnu/libWildMidi.so.2.0.0]
+		// 197,166,524  /build/glibc-MECilU/glibc-2.24/math/../sysdeps/ieee754/dbl-64/s_sin.c:__sin_avx [/lib/x86_64-linux-gnu/libm-2.24.so]
+		//
+		const int options = 0; // WM_MO_REVERB | WM_MO_ENHANCED_RESAMPLING;
+		const int ret = WildMidi_Init(path, mixingRate, options);
 		debug(kDebug_XMIDI, "WildMidi_Init() path '%s' ret %d", path, ret);
 		if (ret != 0) {
 			const char *err = WildMidi_GetError();
@@ -80,6 +90,7 @@ struct XmiPlayer_WildMidi : XmiPlayer {
 		if (_midiBuffer) {
 			memcpy(_midiBuffer, data, dataSize);
 			_midiHandle = WildMidi_OpenBuffer(_midiBuffer, dataSize);
+			WildMidi_SetOption(_midiHandle, WM_MO_LOOP, WM_MO_LOOP);
 		}
 	}
 
@@ -427,7 +438,7 @@ struct XmiPlayer_FluidSynth : XmiPlayer {
 				break;
 			}
 		}
-		if (_currentXmiEvent >= _xmiParser._eventsCount) {
+		if (_currentXmiEvent >= _xmiParser._eventsCount) { // loop, rewind at the beginning of the song
 			_currentXmiEvent = 0;
 			_currentTick = 0;
 		}
@@ -442,10 +453,7 @@ struct XmiPlayer_FluidSynth : XmiPlayer {
 				_currentTick += _tickDuration;
 				_samplesLeft = _samplesPerTick;
 			}
-			int count = _samplesLeft;
-			if (count > len) {
-				count = len;
-			}
+			const int count = MIN(_samplesLeft, len);
 			fluid_synth_write_s16(_fluidSynth, count, buffer, 0, 2, buffer, 1, 2);
 			buffer += count * 2;
 			_samplesLeft -= count;

@@ -8,6 +8,17 @@
 #include "trigo.h"
 #include "resource.h"
 
+static const char *_levelsPsx[] = {
+	"1", "2a", "2b", "2c", "3", "4a", "4b", "4c", "5a", "5b", "5c", "6a", "6b"
+};
+
+// indexed by FileLanguage
+static char _languagesPsx[] = {
+	'u', 'f', 'g', 's', 'i', 'j'
+};
+
+static const bool kLoadPsxData = false;
+
 Resource::Resource() {
 	memset(_treesTable, 0, sizeof(_treesTable));
 	memset(_treesTableCount, 0, sizeof(_treesTableCount));
@@ -34,10 +45,19 @@ Resource::Resource() {
 	_demoInputData = 0;
 	memset(&_userConfig, 0, sizeof(_userConfig));
 	memset(_gusPatches, 0, sizeof(_gusPatches));
+	_lastObjectKey = -1;
+	_textIndexesTableCount = 0;
+	_textIndexesTable = 0;
+	_vrmLoadingBitmap = 0;
+	_vagOffsetsTableSize = 0;
+	memset(_levOffsetsTable, 0, sizeof(_levOffsetsTable));
+	_fileLev = 0;
+	memset(_sonOffsetsTable, 0, sizeof(_sonOffsetsTable));
+	_fileSon = 0;
 }
 
 Resource::~Resource() {
-	// TODO
+	// TODO - reclaimed by the OS when the program exits
 }
 
 void Resource::loadCMD(File *fp, int dataSize) {
@@ -85,7 +105,7 @@ void Resource::loadENV(File *fp, int dataSize) {
 	fileRead(fp, _envAniData, dataSize);
 }
 
-static int rescompareIndexByObjectName(const void *p1, const void *p2) {
+static int resCompareIndexByObjectName(const void *p1, const void *p2) {
 	const ResObjectIndex *obj1 = (const ResObjectIndex *)p1;
 	const ResObjectIndex *obj2 = (const ResObjectIndex *)p2;
 	return strcmp(obj1->objectName, obj2->objectName);
@@ -104,17 +124,48 @@ void Resource::loadObjectIndexes(File *fp, int dataSize) {
 		objectIndex->objectKey = 0;
 		objectIndex->dataOffs = fileReadUint32LE(fp);
 	}
-	qsort(_objectIndexesTable, _objectIndexesTableCount, sizeof(ResObjectIndex), rescompareIndexByObjectName);
+	qsort(_objectIndexesTable, _objectIndexesTableCount, sizeof(ResObjectIndex), resCompareIndexByObjectName);
 }
 
-void Resource::loadObjectText(File *fp, int dataSize) {
+void Resource::loadObjectText(File *fp, int dataSize, int levelNum) {
 	free(_objectTextData);
 	_objectTextData = ALLOC<uint8_t>(dataSize);
 	_objectTextDataSize = dataSize;
 	fileRead(fp, _objectTextData, dataSize);
+
+	if (!g_hasPsx && fileLanguage() == kFileLanguage_SP && levelNum == 5) {
+
+		// fix Spanish translation 'DESACTIVADOS' to 'ACTIVADOS'
+		//
+		//  sp : message 0 offset 0x625a value 0 len -43 'PANELES DEL SUELO DESACTIVADOS'
+		//  en : message 0 offset 0x5828 value 0 len -35 'FLOOR PANELS ACTIVATED'
+		//  fr : message 0 offset 0x6035 value 0 len -28 'DALLES ACTIVEES'
+
+		uint8_t *p = _objectTextData + 0x625a;
+		if (READ_LE_UINT32(p + 4) == 1) {
+			if ((int32_t)READ_LE_UINT32(p + 12) == -43) {
+				strcpy((char *)p + 28, "PANELES DEL SUELO ACTIVADOS");
+			}
+		}
+	}
+	if (0) {
+		int offset = 0;
+		while (offset < _objectTextDataSize) {
+			const uint8_t *p = _objectTextData + offset;
+			const int groupSize = READ_LE_UINT32(p); p += 4;
+			const int messagesCount = READ_LE_UINT32(p); p += 4;
+			for (int i = 0; i < messagesCount; ++i) {
+				const uint32_t value = READ_LE_UINT32(p); p += 4;
+				const int32_t len = (int32_t)READ_LE_UINT32(p); p += 4;
+				debug(kDebug_RESOURCE, "message %d offset 0x%x value %d len %d '%s'", i, offset, value, len, &p[12]);
+				p += ABS(len);
+			}
+			offset += groupSize + 4;
+		}
+	}
 }
 
-static int rescompareKeyPaths(const void *p1, const void *p2) {
+static int resCompareKeyPaths(const void *p1, const void *p2) {
 	const ResKeyPath *obj1 = (const ResKeyPath *)p1;
 	const ResKeyPath *obj2 = (const ResKeyPath *)p2;
 	return strcmp(obj1->pathName, obj2->pathName);
@@ -148,7 +199,7 @@ void Resource::loadKeyPaths(File *fp, int dataSize) {
 	free(kpData);
 
 	debug(kDebug_RESOURCE, "_keyPathsTableCount %d", _keyPathsTableCount);
-	qsort(_keyPathsTable, _keyPathsTableCount, sizeof(ResKeyPath), rescompareKeyPaths);
+	qsort(_keyPathsTable, _keyPathsTableCount, sizeof(ResKeyPath), resCompareKeyPaths);
 }
 
 void Resource::loadINI(File *fp, int dataSize) {
@@ -268,6 +319,48 @@ void Resource::loadTrigo() {
 	}
 }
 
+void Resource::loadINM(int levelNum) {
+	_textIndexesTableCount = 0;
+	free(_textIndexesTable);
+	_textIndexesTable = 0;
+
+	char filename[32];
+	File *fp = 0;
+	int dataSize = 0;
+	if (kLoadPsxData && g_hasPsx) {
+		snprintf(filename, sizeof(filename), "level%d%c.lev", levelNum + 1, _languagesPsx[fileLanguage()]);
+		fp = fileOpenPsx(filename, kFileType_PSX_LEVELDATA, levelNum + 1);
+		if (!fp) {
+			error("Resource::loadINM() Unable to open '%s'", filename);
+		}
+		dataSize = fileSize(fp);
+	} else {
+		snprintf(filename, sizeof(filename), "%s.inm", _levelDescriptionsTable[levelNum].name);
+		if (fileExists(filename, kFileType_TEXT)) {
+			fp = fileOpen(filename, &dataSize, kFileType_TEXT);
+		}
+	}
+	if (fp) {
+		_textIndexesTableCount = dataSize / sizeof(uint32_t);
+		_textIndexesTable = ALLOC<uint32_t>(_textIndexesTableCount);
+		for (uint32_t i = 0; i < _textIndexesTableCount; ++i) {
+			_textIndexesTable[i] = fileReadUint32LE(fp);
+		}
+		fileClose(fp);
+	} else {
+		_textIndexesTableCount = _lastObjectKey + 1;
+		_textIndexesTable = ALLOC<uint32_t>(_textIndexesTableCount);
+		for (uint32_t i = 0; i < _textIndexesTableCount; ++i) {
+			_textIndexesTable[i] = 0xFFFFFFFF;
+		}
+		for (uint32_t i = 0; i < _objectIndexesTableCount; ++i) {
+			int16_t key = _objectIndexesTable[i].objectKey;
+			assert(key > 0 && key < _textIndexesTableCount);
+			_textIndexesTable[key - 1] = _objectIndexesTable[i].dataOffs;
+		}
+	}
+}
+
 static uint8_t *convertANI(uint8_t *p, uint32_t *size) {
 	switch (*size) {
 	case 8: // "ANIFRAM"
@@ -359,11 +452,12 @@ static const struct {
 	{ "msg", &Resource::loadMSG }
 };
 
-void Resource::loadLevelData(const char *levelName, int levelNum) {
+void Resource::loadLevelData(int levelNum) {
 	File *fp;
 	int dataSize;
 	char filename[32];
 
+	const char *levelName = _levelDescriptionsTable[levelNum].name;
 	for (uint32_t i = 0; i < ARRAYSIZE(_resLoadDataTable); ++i) {
 		snprintf(filename, sizeof(filename), "%s.%s", levelName, _resLoadDataTable[i].ext);
 		int type = _resLoadDataTable[i].type;
@@ -391,9 +485,7 @@ void Resource::loadLevelData(const char *levelName, int levelNum) {
 			node->childKey = fileReadUint16LE(fp);
 			node->nextKey = fileReadUint16LE(fp);
 			node->dataOffset = 4 + count * 12 + offs;
-			if (size != 0) {
-				node->dataSize = size;
-			}
+			node->dataSize = size;
 		}
 		for (uint32_t j = 0; j < count; ++j) {
 			ResTreeNode *node = &_treesTable[type][j];
@@ -412,13 +504,16 @@ void Resource::loadLevelData(const char *levelName, int levelNum) {
 	}
 
 	for (uint32_t i = 0; i < ARRAYSIZE(_resLoadDataTable2); ++i) {
-		snprintf(filename, sizeof(filename), "level%d.%s", levelNum, _resLoadDataTable2[i].ext);
+		snprintf(filename, sizeof(filename), "level%d.%s", levelNum + 1, _resLoadDataTable2[i].ext);
 		fp = fileOpen(filename, &dataSize, kFileType_DATA);
 		(this->*_resLoadDataTable2[i].LoadData)(fp, dataSize);
 		fileClose(fp);
 	}
 
-	patchCmdData(levelNum);
+	_conradVoiceCmdNum = -1;
+	patchCmdData(levelNum + 1);
+
+	_lastObjectKey = -1;
 
 	snprintf(filename, sizeof(filename), "%s.env", levelName);
 	fp = fileOpen(filename, &dataSize, kFileType_DATA);
@@ -437,7 +532,7 @@ void Resource::loadLevelData(const char *levelName, int levelNum) {
 
 	snprintf(filename, sizeof(filename), "%s.dtt", levelName);
 	fp = fileOpen(filename, &dataSize, kFileType_TEXT);
-	loadObjectText(fp, dataSize);
+	loadObjectText(fp, dataSize, levelNum + 1);
 	fileClose(fp);
 }
 
@@ -569,10 +664,17 @@ void Resource::setObjectKey(const char *objectName, int16_t objectKey) {
 	if (objectIndex) {
 		objectIndex->objectKey = objectKey;
 	}
+	if (_lastObjectKey < objectKey) {
+		_lastObjectKey = objectKey;
+	}
 }
 
 int Resource::getOffsetForObjectKey(int16_t objectKey) {
 	debug(kDebug_RESOURCE, "Resource::getOffsetForObjectKey() key %d", objectKey);
+	if (objectKey < _textIndexesTableCount) {
+		assert(objectKey > 0);
+		return (int32_t)_textIndexesTable[objectKey - 1];
+	}
 	for (int i = 0; i < _objectIndexesTableCount; ++i) {
 		ResObjectIndex *objectIndex = &_objectIndexesTable[i];
 		if (objectKey == objectIndex->objectKey) {
@@ -614,7 +716,7 @@ bool Resource::getMessageDescription(ResMessageDescription *m, uint32_t value, u
 	int messagesCount = READ_LE_UINT32(p); p += 4;
 	for (int i = 0; i < messagesCount; ++i) {
 		uint32_t val = READ_LE_UINT32(p); p += 4;
-		uint32_t sz = READ_LE_UINT32(p); p += 4;
+		int32_t len = (int32_t)READ_LE_UINT32(p); p += 4;
 		if (val == value) {
 			m->frameSync = READ_LE_UINT16(p); p += 2;
 			m->duration = READ_LE_UINT16(p); p += 2;
@@ -624,7 +726,8 @@ bool Resource::getMessageDescription(ResMessageDescription *m, uint32_t value, u
 			m->data = p;
 			return true;
 		}
-		p += sz;
+		// last message has negative length
+		p += ABS(len);
 	}
 	return false;
 }
@@ -655,6 +758,35 @@ void Resource::patchCmdData(int levelNum) {
 			if (READ_LE_UINT32(p + 0x24) == 0x13 && READ_LE_UINT32(p + 0x28) == 0 && READ_LE_UINT32(p + 0x2C) == 5) {
 				p[0x2C] = 1;
 			}
+		}
+	}
+
+	//
+	// Conrad mocking voices are conditionned by a NOT rnd ( 20 ) which is quite unlikely to occur.
+	//
+	// LEVEL1.CMD  script 835 (0x11E94) - COND NOT rnd ( 20 ) STMT set_obj ( 0, 267, 2 )
+	// LEVEL2.CMD  script 712 (0xFA78)
+	// LEVEL3.CMD  script 695 (0xF6F0)
+	// LEVEL4.CMD  script 721 (0xFF20)
+	// LEVEL5.CMD  script 949 (0x148EC)
+	// LEVEL6.CMD  script 513 (0xBCC8)
+	// LEVEL7.CMD  script 457 (0xAC38)
+	// LEVEL8.CMD  script 837 (0x12830)
+	// LEVEL9.CMD  script 873 (0x1314C)
+	// LEVEL10.CMD script 701 (0xF6B8)
+	// LEVEL11.CMD script 551 (0xCA64)
+	// LEVEL12.CMD script 778 (0x11628)
+	//
+	// As the voices are in the datafiles, it is possible to re-enable them. The condition is changed to
+	// NOT rnd( 1 ) to always skip the set_obj statement and execute the following voiced statments.
+	//
+
+	for (int i = 0; i < _cmdOffsetsTableCount; ++i) {
+		uint8_t *p = _cmdData + _cmdOffsetsTable[i];
+		if (READ_LE_UINT32(p) == 0x93 && READ_LE_UINT32(p + 4) == 0 && READ_LE_UINT32(p + 8) == 20) {
+			p[8] = 1;
+			debug(kDebug_RESOURCE, "Found mocking voice check cmd %d", i);
+			_conradVoiceCmdNum = i;
 		}
 	}
 }
@@ -810,4 +942,253 @@ void Resource::loadCustomGUS() {
 	}
 
 	free(gusData);
+}
+
+static const struct {
+	const char *ext;
+	void (Resource::*LoadData)(File *fp, int dataSize);
+} _resLoadDataTablePsx[] = {
+	{ "CMD", &Resource::loadCMD },
+	{ "ENV", &Resource::loadENV },
+	{ "MSG", &Resource::loadMSG }
+};
+
+static const struct {
+	const char *ext;
+	int type;
+} _resTreeTablePsx[] = {
+	{ "PAL", kResType_PAL },
+	{ "SPR", kResType_SPR },
+	{ "F3D", kResType_F3D },
+	{ "P3D", kResType_P3D }
+};
+
+void Resource::loadLevelDataPsx(int level, int resType) {
+	switch (resType) {
+	case kResTypePsx_DTT: {
+			char name[16];
+			snprintf(name, sizeof(name), "level%d%c.lev", level + 1, _languagesPsx[fileLanguage()]);
+			File *fp = fileOpenPsx(name, kFileType_PSX_LEVELDATA, level + 1);
+			if (fp) {
+				const uint32_t dataSize = fileSize(fp);
+				loadObjectText(fp, dataSize, level + 1);
+				fileClose(fp);
+			}
+		}
+		break;
+	case kResTypePsx_LEV: {
+			char name[16];
+			snprintf(name, sizeof(name), "level%d.lev", level + 1);
+			_fileLev = fileOpenPsx(name, kFileType_PSX_LEVELDATA, level + 1);
+			if (_fileLev) {
+				readDataOffsetsTable(_fileLev, kResOffsetType_LEV, _levOffsetsTable);
+				if (kLoadPsxData) {
+					for (uint32_t i = 0; i < ARRAYSIZE(_resLoadDataTablePsx); ++i) {
+						const uint32_t dataSize = seekDataPsx(_resLoadDataTablePsx[i].ext, _fileLev, kResOffsetType_LEV);
+						(this->*_resLoadDataTablePsx[i].LoadData)(_fileLev, dataSize);
+					}
+					for (uint32_t i = 0; i < ARRAYSIZE(_resTreeTablePsx); ++i) {
+						const uint32_t dataSize = seekDataPsx(_resTreeTablePsx[i].ext, _fileLev, kResOffsetType_LEV);
+						loadTreePsx(_fileLev, dataSize, _resTreeTablePsx[i].type);
+					}
+				}
+			}
+		}
+		break;
+	case kResTypePsx_SON: {
+			char name[16];
+			snprintf(name, sizeof(name), "level%d.son", level + 1);
+			_fileSon = fileOpenPsx(name, kFileType_PSX_LEVELDATA, level + 1);
+			if (_fileSon) {
+				readDataOffsetsTable(_fileSon, kResOffsetType_SON, _sonOffsetsTable);
+				loadVAB(_fileSon);
+			}
+		}
+		break;
+	case kResTypePsx_VRM: {
+			char name[16];
+			snprintf(name, sizeof(name), "level%s.vrm", _levelsPsx[level]);
+			File *fp = fileOpenPsx(name, kFileType_PSX_LEVELDATA, level + 1);
+			if (fp) {
+				loadVRM(fp);
+				fileClose(fp);
+			}
+		}
+		break;
+	}
+}
+
+void Resource::unloadLevelDataPsx(int resType) {
+	switch (resType) {
+	case kResTypePsx_LEV:
+		memset(_levOffsetsTable, 0, sizeof(_levOffsetsTable));
+		if (_fileLev) {
+			fileClose(_fileLev);
+			_fileLev = 0;
+		}
+		break;
+	case kResTypePsx_SON:
+		memset(_sonOffsetsTable, 0, sizeof(_sonOffsetsTable));
+		if (_fileSon) {
+			fileClose(_fileSon);
+			_fileSon = 0;
+		}
+		_vagOffsetsTableSize = 0;
+		break;
+	case kResTypePsx_VRM:
+		if (_vrmLoadingBitmap) {
+			free(_vrmLoadingBitmap);
+			_vrmLoadingBitmap = 0;
+		}
+		break;
+	}
+}
+
+void Resource::readDataOffsetsTable(File *fp, int offsetType, ResPsxOffset *offsetsTable) {
+	const int dataSize = fileSize(fp);
+	const int count = fileReadUint32LE(fp);
+	const uint32_t baseOffset = sizeof(uint32_t) + count * (sizeof(uint32_t) + 4);
+	for (int i = 0; i < count; ++i) {
+		offsetsTable[i].offset = fileReadUint32LE(fp) + baseOffset;
+	}
+	for (int i = 0; i < count; ++i) {
+		fileRead(fp, offsetsTable[i].ext, sizeof(offsetsTable[i].ext));
+		const uint32_t nextOffset = (i < count - 1) ? offsetsTable[i + 1].offset : dataSize;
+		offsetsTable[i].size = nextOffset - offsetsTable[i].offset;
+	}
+}
+
+uint32_t Resource::seekDataPsx(const char *ext, File *fp, int offsetType, uint32_t offset) {
+	switch (offsetType) {
+	case kResOffsetType_LEV:
+		for (int i = 0; i < kResPsxLevOffsetsTableSize; ++i) {
+			if (strcmp(_levOffsetsTable[i].ext, ext) == 0) {
+				fileSetPos(fp, _levOffsetsTable[i].offset + offset, kFilePosition_SET);
+				return _levOffsetsTable[i].size;
+			}
+		}
+		break;
+	case kResOffsetType_SON:
+		for (int i = 0; i < kResPsxSonOffsetsTableSize; ++i) {
+			if (strcmp(_sonOffsetsTable[i].ext, ext) == 0) {
+				fileSetPos(fp, _sonOffsetsTable[i].offset + offset, kFilePosition_SET);
+				return _sonOffsetsTable[i].size;
+			}
+		}
+		break;
+	}
+	return 0;
+}
+
+void Resource::loadVAB(File *fp) {
+	_vagOffsetsTableSize = 0;
+	memset(_vagOffsetsTable, 0, sizeof(_vagOffsetsTable));
+
+	const uint32_t vhSize = seekDataPsx("VH", fp, kResOffsetType_SON);
+	if (vhSize == 0) {
+		warning("'VH' data resource not found");
+		return;
+	}
+	uint8_t header[32];
+	fileRead(fp, header, sizeof(header));
+	if (memcmp(header, "pBAV", 4) != 0 || READ_LE_UINT32(header + 4) != 7) {
+		warning("Unexpected VAB data header '%08x'", READ_LE_UINT32(header));
+		return;
+	}
+	const int programsCount = READ_LE_UINT16(header + 18);
+	const int vagCount = READ_LE_UINT16(header + 22);
+	// const uint8_t volume = header[24];
+	// const uint8_t pan = header[25];
+
+	// skip the audio attribute and tone attribute tables
+	fileSetPos(fp, 16 * 128 + 32 * 16 * programsCount, kFilePosition_CUR);
+
+	uint32_t vbOffset = 0;
+	for (int i = 0; i < vagCount; ++i) {
+		const uint32_t vbSize = fileReadUint16LE(fp) << 3;
+		_vagOffsetsTable[i].offset = vbOffset;
+		_vagOffsetsTable[i].size = vbSize;
+		vbOffset += vbSize;
+	}
+	_vagOffsetsTableSize = vagCount;
+}
+
+void Resource::loadVRM(File *fp) {
+	fileReadUint32LE(fp);
+	int count = 0;
+	while (1) {
+		int w = fileReadUint16LE(fp);
+		int h = fileReadUint16LE(fp);
+		if (fileEof(fp)) {
+			break;
+		}
+		debug(kDebug_RESOURCE, "VRAM %d w %d h %d", count, w, h);
+		if (count == 0) {
+			assert(w == 640 && h == 272);
+			_vrmLoadingBitmap = (uint8_t *)malloc(kVrmLoadingScreenWidth * kVrmLoadingScreenHeight * 4);
+			if (_vrmLoadingBitmap) {
+				const int dstPitch = kVrmLoadingScreenWidth * 4;
+				for (int y = 0; y < kVrmLoadingScreenHeight; ++y) {
+					uint8_t *dst = _vrmLoadingBitmap + (kVrmLoadingScreenHeight - 1 - y) * dstPitch;
+					for (int x = 0; x < kVrmLoadingScreenWidth; ++x) {
+						const uint16_t color = fileReadUint16LE(fp);
+						*dst++ = ( color        & 31) << 3; // r
+						*dst++ = ((color >>  5) & 31) << 3; // g
+						*dst++ = ((color >> 10) & 31) << 3; // b
+						*dst++ = 255;
+					}
+				}
+				h -= kVrmLoadingScreenHeight;
+			}
+		} else {
+			assert(w == 256 && h == 256);
+		}
+		fileSetPos(fp, w * h, kFilePosition_CUR);
+		++count;
+	}
+}
+
+uint32_t Resource::seekVag(int num) {
+	if (num >= 0 && num < _vagOffsetsTableSize) {
+		const uint32_t vbSize = seekDataPsx("VB", _fileSon, kResOffsetType_SON, _vagOffsetsTable[num].offset);
+		if (vbSize != 0) {
+			return _vagOffsetsTable[num].size;
+		}
+		warning("'VB' data resource not found");
+	}
+	return 0;
+}
+
+void Resource::loadTreePsx(File *fp, int dataSize, int type) {
+
+	const bool hasKeys = (type == kResType_ANI || type == kResType_STM);
+
+	uint8_t header[0x20];
+	fileRead(fp, header, sizeof(header));
+
+	const int count = READ_LE_UINT32(header + 4);
+	const int sizeOfOffset = READ_LE_UINT32(header + 8);
+
+	uint32_t offset = sizeof(header) + count * sizeOfOffset;
+	if (hasKeys) {
+		offset += 2 * sizeof(uint16_t) * count;
+	}
+
+	_treesTable[type] = ALLOC<ResTreeNode>(count);
+	_treesTableCount[type] = count;
+	for (uint32_t j = 0; j < count; ++j) {
+		ResTreeNode *node = &_treesTable[type][j];
+		memset(node, 0, sizeof(ResTreeNode));
+		node->dataOffset = offset;
+		const uint32_t size = (sizeOfOffset == sizeof(uint32_t)) ? fileReadUint32LE(fp) : fileReadUint16LE(fp);
+		node->dataSize = size;
+		offset += size;
+	}
+	if (hasKeys) {
+		for (uint32_t j = 0; j < count; ++j) {
+			ResTreeNode *node = &_treesTable[type][j];
+			node->childKey = fileReadUint16LE(fp);
+			node->nextKey = fileReadUint16LE(fp);
+		}
+	}
 }
